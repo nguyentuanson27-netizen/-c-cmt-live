@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld("liveCommentTts", {
   closeSource: () => ipcRenderer.invoke("source:close"),
   openDevTools: () => ipcRenderer.invoke("source:devtools"),
   onSourceStatus: (callback: (status: SourceStatus) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, status: SourceStatus) => callback(status);
+    const listener = (_event: unknown, status: SourceStatus) => callback(status);
     ipcRenderer.on("source:status", listener);
     return () => ipcRenderer.removeListener("source:status", listener);
   },
