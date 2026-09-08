@@ -71,8 +71,8 @@ ipcMain.handle("source:open", async (event, request: unknown) => {
     source.window.on("closed", () => {
       if (activeSource?.window === source.window) {
         activeSource = null;
+        emitStatus("Source window đã đóng.");
       }
-      emitStatus("Source window đã đóng.");
     });
 
     emitStatus(`Đang mở ${request.platform}...`);
