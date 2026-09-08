@@ -5,17 +5,21 @@
 - [x] Initialize repository
 - [x] Save approved MVP spec
 - [x] Save implementation plan
-- [ ] Replace bootstrap README with full project README
+- [x] Replace bootstrap README with full project README
 
 ## Phase 1 — Feasibility harness
 
-- [ ] Add `package.json` and TypeScript config
-- [ ] Add Electron main window
-- [ ] Add platform URL validation
-- [ ] Add secure/muted source BrowserWindow helper
-- [ ] Add persistent platform partitions
-- [ ] Add minimal local operator UI for opening a source URL
-- [ ] Run typecheck/build in an environment with installed dependencies
+- [x] Add `package.json` and TypeScript config
+- [x] Add Electron main window
+- [x] Add platform URL validation
+- [x] Add secure/muted source BrowserWindow helper
+- [x] Add persistent platform partitions
+- [x] Add minimal local operator UI for opening a source URL
+- [x] Add URL allowlist tests
+- [ ] Run `npm install` and commit reviewed `package-lock.json`
+- [ ] Run repository `npm test`
+- [ ] Run repository `npm run typecheck`
+- [ ] Run Electron GUI and confirm source/session behavior
 
 ## Phase 2 — Capture gate
 
