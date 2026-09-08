@@ -38,14 +38,17 @@ export function createSourceWindow(platform: Platform, inputUrl: string): Source
   window.webContents.setAudioMuted(true);
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
-  const blockUnexpectedNavigation = (event: Electron.Event, navigationUrl: string): void => {
+  window.webContents.on("will-navigate", (event, navigationUrl) => {
     if (!isAllowedPlatformUrl(navigationUrl, platform)) {
       event.preventDefault();
     }
-  };
+  });
 
-  window.webContents.on("will-navigate", blockUnexpectedNavigation);
-  window.webContents.on("will-redirect", blockUnexpectedNavigation);
+  window.webContents.on("will-redirect", (event, navigationUrl) => {
+    if (!isAllowedPlatformUrl(navigationUrl, platform)) {
+      event.preventDefault();
+    }
+  });
 
   void window.loadURL(url.href);
 
