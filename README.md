@@ -23,11 +23,34 @@ Repository đang ở **feasibility phase**.
 - platform URL allowlist;
 - unexpected popup/new-window bị chặn;
 - nút mở DevTools để inspect live page hiện tại;
-- test cho URL allowlist.
+- test cho URL allowlist;
+- spec, plan, agent rules, architecture decision, feasibility runbook và capture-evidence template.
 
 **Chưa có:** parser comment thật, queue TTS hoàn chỉnh, Facebook multi-live, Windows installer.
 
 Đây là chủ ý của spec: phải chứng minh được cách bắt **một comment thật** trên cả Facebook, TikTok và Shopee trước khi build phần còn lại.
+
+## Tài liệu project
+
+| File | Mục đích |
+|---|---|
+| `AGENTS.md` | Quy tắc cho coding agent: scope, hard gate, security và verification honesty |
+| `docs/specs/live-comment-tts-mvp.md` | Product/technical contract đã chốt |
+| `docs/adr/0001-electron-local-browser-capture.md` | Lý do chọn Electron local + browser capture và các trade-off |
+| `docs/runbooks/feasibility-harness.md` | Hướng dẫn chạy harness trên Windows GUI, chuẩn bị account và chứng minh comment thật |
+| `tasks/plan.md` | Implementation plan theo dependency/risk-first |
+| `tasks/todo.md` | Checklist trạng thái hiện tại |
+| `tasks/capture-findings.md` | Template ghi bằng chứng runtime Facebook/TikTok/Shopee |
+
+Nếu chỉ muốn tiếp tục phase hiện tại, đọc theo thứ tự:
+
+```text
+AGENTS.md
+  ↓
+docs/runbooks/feasibility-harness.md
+  ↓
+tasks/capture-findings.md
+```
 
 ## MVP contract
 
@@ -96,10 +119,21 @@ MVP không dùng:
 
 Khuyến nghị Node.js 24.x cho môi trường development.
 
+Clone và checkout branch đang triển khai:
+
+```bash
+git clone https://github.com/nguyentuanson27-netizen/-c-cmt-live.git
+cd ./-c-cmt-live
+git checkout feat/mvp-live-comment-tts
+```
+
+Cài dependency và kiểm tra:
+
 ```bash
 npm install
 npm run typecheck
 npm test
+npm run build
 npm run dev
 ```
 
@@ -109,16 +143,20 @@ npm run dev
 
 ## Cách dùng feasibility harness
 
+Chi tiết đầy đủ nằm ở `docs/runbooks/feasibility-harness.md`.
+
+Flow ngắn:
+
 1. Chạy `npm run dev`.
 2. Chọn Facebook, TikTok hoặc Shopee.
 3. Dán URL livestream HTTPS của đúng platform.
 4. Bấm **Mở source**.
 5. Login thủ công trong source window nếu session chưa đăng nhập.
 6. Bấm **Mở DevTools**.
-7. Inspect DOM/network của live page hiện tại để xác định cách lấy một comment mới gồm:
-   - `username`
-   - `text`
-8. Chỉ sau khi capture route của cả 3 platform được chứng minh mới tiếp tục queue/TTS/app UI đầy đủ.
+7. Từ account viewer khác gửi comment marker rõ ràng.
+8. Inspect DOM trước; chỉ inspect network/WebSocket nếu DOM không khả thi.
+9. Chứng minh lấy được đúng `username + text` từ comment thật.
+10. Ghi evidence vào `tasks/capture-findings.md`.
 
 Không đoán selector từ memory và không copy selector cũ chỉ vì nó từng hoạt động.
 
@@ -157,9 +195,17 @@ Lưu ý: popup SSO bên thứ ba có thể bị chặn bởi thiết kế này. 
 
 ```text
 .
+├─ AGENTS.md
+├─ README.md
 ├─ docs/
-│  └─ specs/live-comment-tts-mvp.md
+│  ├─ adr/
+│  │  └─ 0001-electron-local-browser-capture.md
+│  ├─ runbooks/
+│  │  └─ feasibility-harness.md
+│  └─ specs/
+│     └─ live-comment-tts-mvp.md
 ├─ tasks/
+│  ├─ capture-findings.md
 │  ├─ plan.md
 │  └─ todo.md
 ├─ public/
@@ -211,11 +257,7 @@ minimal operator UI/config
 Windows verification/package
 ```
 
-Chi tiết xem:
-
-- `docs/specs/live-comment-tts-mvp.md`
-- `tasks/plan.md`
-- `tasks/todo.md`
+Chi tiết xem `tasks/plan.md` và `tasks/todo.md`.
 
 ## Verification status
 
@@ -225,7 +267,7 @@ Chi tiết xem:
 - `node --check` trên JavaScript đã emit;
 - manual assertions cho platform URL allowlist/lookalike-host rejection.
 
-Chưa thực hiện được trong execution environment hiện tại:
+Chưa thực hiện được trong execution environment của lần scaffold:
 
 - `npm install`;
 - repository `npm test`;
@@ -234,7 +276,7 @@ Chưa thực hiện được trong execution environment hiện tại:
 - authenticated Facebook/TikTok/Shopee live runtime;
 - real comment capture.
 
-Không coi capture gate hoặc MVP là hoàn thành cho tới khi các runtime check tương ứng pass.
+Không coi capture gate hoặc MVP là hoàn thành cho tới khi các runtime check tương ứng pass và được ghi lại trong `tasks/capture-findings.md`.
 
 ## Out of scope MVP
 
