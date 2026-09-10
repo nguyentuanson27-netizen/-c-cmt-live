@@ -23,9 +23,9 @@ Repository đang ở **feasibility phase**.
 - platform URL allowlist;
 - unexpected popup/new-window bị chặn;
 - nút mở DevTools để inspect live page hiện tại;
-- URL allowlist/source-window tests;
+- URL allowlist/source-window security tests;
 - `package-lock.json`;
-- GitHub Actions CI chạy `npm ci` + `npm test` trên Windows và Ubuntu;
+- GitHub Actions CI chạy `npm ci` + `npm run typecheck` + `npm test` + `npm run build` trên Windows và Ubuntu với Node 24;
 - spec, plan, agent rules, architecture decision, feasibility runbook và capture-evidence template.
 
 **Chưa có:** parser comment thật, queue TTS hoàn chỉnh, Facebook multi-live, Windows installer.
@@ -119,7 +119,7 @@ MVP không dùng:
 
 ## Quick start
 
-CI hiện dùng Node.js 22. Dependency tree hiện yêu cầu Node `>=22.12.0`; dùng Node 22 LTS hoặc mới hơn cho development.
+CI dùng Node.js 24. Dùng Node 24 cho development để khớp môi trường CI hiện tại.
 
 Clone và checkout branch đang triển khai:
 
@@ -133,8 +133,8 @@ Cài dependency từ lockfile và kiểm tra:
 
 ```bash
 npm ci
-npm test
 npm run typecheck
+npm test
 npm run build
 npm run dev
 ```
@@ -268,10 +268,12 @@ Chi tiết xem `tasks/plan.md` và `tasks/todo.md`.
 
 **Verified by current GitHub Actions CI:**
 
-- `npm ci` passes on `windows-latest` with Node 22;
-- `npm test` passes on `windows-latest` with Node 22;
-- `npm ci` passes on `ubuntu-latest` with Node 22;
-- `npm test` passes on `ubuntu-latest` with Node 22.
+Trên cả `windows-latest` và `ubuntu-latest` với Node 24:
+
+- `npm ci` passes;
+- `npm run typecheck` passes;
+- `npm test` passes;
+- `npm run build` passes.
 
 **Also performed during the initial scaffold:**
 
@@ -281,8 +283,6 @@ Chi tiết xem `tasks/plan.md` và `tasks/todo.md`.
 
 **Not yet verified:**
 
-- `npm run typecheck` in CI/current GUI environment;
-- `npm run build` in CI/current GUI environment;
 - Electron GUI runtime;
 - persistent authenticated session behavior on real platform pages;
 - authenticated Facebook/TikTok/Shopee live runtime;
