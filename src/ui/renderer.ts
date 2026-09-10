@@ -25,9 +25,11 @@ if (!platformSelect || !liveUrlInput || !openButton || !closeButton || !devTools
   throw new Error("Feasibility harness UI is missing required elements");
 }
 
+const statusOutput = statusElement;
+
 function setStatus(message: string, level: SourceStatus["level"] = "info"): void {
-  statusElement.textContent = message;
-  statusElement.dataset.level = level;
+  statusOutput.textContent = message;
+  statusOutput.dataset.level = level;
 }
 
 openButton.addEventListener("click", async () => {
