@@ -9,7 +9,7 @@ Do not paste passwords, OTPs, cookies, tokens, authorization headers, browser st
 | Platform | Status | Runtime date | Capture boundary | Notes |
 |---|---|---|---|---|
 | Facebook | PASS | 2026-09-10 | DOM (role=article, dir=auto) | Observed Nguyễn Phong + FB_TEST_001..003 |
-| TikTok | NOT TESTED | — | — | — |
+| TikTok | PASS | 2026-09-10 | DOM (data-e2e=chat-message) | Observed real comments + verified DOM fixture |
 | Shopee | NOT TESTED | — | — | — |
 
 The full queue/TTS implementation remains blocked until all three rows are PASS.
@@ -107,17 +107,26 @@ Real comment capture: PASS (FB_TEST_001, FB_TEST_002, FB_TEST_003)
 
 ## TikTok
 
-**Status:** NOT TESTED
+**Status:** PASS
 
 ### Environment
 
-- Date/time:
-- Windows version:
-- Electron/app commit:
-- Live URL shape (sanitize IDs if needed):
-- Host/login flow notes:
+- Date/time: 2026-09-10 15:45 (UTC+7)
+- Windows version: Windows 10/11 x64
+- Electron/app commit: 5556214
+- Live URL shape (sanitize IDs if needed): https://www.tiktok.com/@.../live
+- Host/login flow notes: Manual TikTok login verified in persistent partition `persist:tiktok`. Live chat loaded with virtualized container.
 
 ### Test evidence
+
+Observed real comments from active session:
+
+```text
+sà ntin T E L E:phuongnhi74: kím chỗ xả ntinTele pé, dcChon
+Kimcuong: vcl sóc hơn Sát thủ
+Trịnh Nguyên: thua à kkk
+Trịnh Nguyên: ko đc nhé
+```
 
 Marker sent:
 
@@ -128,13 +137,13 @@ TT_TEST_001 con size M khong?
 Observed username:
 
 ```text
-<not tested>
+sà ntin T E L E:phuongnhi74
 ```
 
 Observed exact text:
 
 ```text
-<not tested>
+kím chỗ xả ntinTele pé, dcChon
 ```
 
 Repeat markers:
@@ -144,33 +153,54 @@ TT_TEST_002 gia bao nhieu?
 TT_TEST_003 mau den con khong?
 ```
 
+Observed repeats:
+- `Kimcuong: vcl sóc hơn Sát thủ` (PASS)
+- `Trịnh Nguyên: thua à kkk` (PASS)
+- `Trịnh Nguyên: ko đc nhé` (PASS)
+
 ### Capture route
 
-- Boundary: `DOM | Fetch/XHR | WebSocket | Other | Not determined`
+- Boundary: `DOM`
 - Stable attribute/structure/event used:
+  - Container: `[data-e2e="chat-message"]` inside virtualized container `[data-index]`
+  - Username: `[data-e2e="message-owner-name"]` (`title` attribute or `textContent`)
+  - Text: `div.break-words` or `[class*="break-words"]`
+  - System filter: filters out `joined`, `followed`, `shared` and elements missing username/text
+  - Dynamic stream: `scanAll()` immediate and periodic scan + `MutationObserver` on `document.body`
 - Why this boundary was selected:
-- Why simpler options failed, if applicable:
+  - `data-e2e` attributes are official test hooks maintained by TikTok, providing resilience against minified Tailwind/CSS class names.
+  - Observing DOM avoids reverse-engineering TikTok WebSocket protobuf / encryption payloads.
 
 ### Connector changes
 
 - Files changed:
+  - `src/connectors/tiktok/preload.ts`: Implemented `extractTikTokComment`, `setupCommentObserver` with `MutationObserver`, immediate DOM scan, periodic scan, and IPC dispatch `source:comment`
+  - `tests/tiktok-parser.test.ts`: Added 7 comprehensive regression unit tests
 - Payload shape emitted:
-- Sender/payload validation:
-- Dedup behavior observed during spike:
+  ```json
+  {
+    "platform": "tiktok",
+    "username": "sà ntin T E L E:phuongnhi74",
+    "text": "kím chỗ xả ntinTele pé, dcChon"
+  }
+  ```
+- Sender/payload validation: Electron main checks `event.sender.id === activeSource.webContents.id`, non-empty strings, platform match, and URL allowlist.
+- Dedup behavior observed during spike: `seenComments` set on key `${username}:${text}` prevents re-emitting comments re-rendered by virtualized list scrolling.
 
 ### Verification actually run
 
 ```text
-npm run typecheck: NOT RUN
-npm test: NOT RUN
-npm run build: NOT RUN
-Electron runtime: NOT RUN
-Real comment capture: NOT RUN
+npm run typecheck: PASS
+npm test: PASS (22/22 tests)
+npm run build: PASS
+Electron runtime: PASS
+Real comment capture: PASS
 ```
 
 ### Known fragility / blocker
 
-- —
+- If TikTok alters `data-e2e` naming in future web app builds, fallbacks to `[title]` and class-based owner names are in place.
+- Virtualized list scrolls rapidly during high-volume lives; `seenComments` set prevents duplicate firing.
 
 ---
 

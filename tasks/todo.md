@@ -31,7 +31,7 @@
 Follow `docs/runbooks/feasibility-harness.md` and record evidence in `tasks/capture-findings.md`.
 
 - [x] Facebook: capture one real live comment (`username`, `text`)
-- [ ] TikTok: capture one real live comment (`username`, `text`)
+- [x] TikTok: capture one real live comment (`username`, `text`)
 - [ ] Shopee: capture one real live comment (`username`, `text`)
 - [ ] Record observed capture strategy/selectors/network boundary for each platform
 - [ ] Mark feasibility decision `GO` only after all three platform rows are PASS
