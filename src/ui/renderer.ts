@@ -1,5 +1,4 @@
 import type { Platform } from "../platform";
-import { toRecentCommentView } from "./recent-comment";
 import type { AcceptedCommentPayload, PlayAudioPayload, SourceStatus, TtsStatusPayload } from "./preload";
 
 type LiveCommentTtsApi = {
@@ -144,7 +143,6 @@ function addRecentComment(comment: AcceptedCommentPayload): void {
     return;
   }
 
-  const view = toRecentCommentView(comment);
   const firstPlaceholder = recentCommentsElement.querySelector("p");
   if (firstPlaceholder && firstPlaceholder.textContent?.includes("Chưa có")) {
     recentCommentsElement.innerHTML = "";
@@ -155,14 +153,14 @@ function addRecentComment(comment: AcceptedCommentPayload): void {
 
   const badge = document.createElement("span");
   badge.className = "comment-platform-badge";
-  badge.textContent = view.platformLabel;
+  badge.textContent = comment.platform.toUpperCase();
 
   const author = document.createElement("span");
   author.className = "comment-author";
-  author.textContent = view.authorText;
+  author.textContent = `${comment.username}: `;
 
   const content = document.createElement("span");
-  content.textContent = view.contentText;
+  content.textContent = comment.text;
 
   item.appendChild(badge);
   item.appendChild(author);

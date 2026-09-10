@@ -1,5 +1,4 @@
 import { ipcRenderer } from "electron";
-import { createCommentTracker } from "../comment-tracker";
 
 const platform = "tiktok" as const;
 
@@ -58,6 +57,14 @@ export function extractTikTokComment(el: Element): TikTokCommentPayload | null {
   return { username, text };
 }
 
+export function createTikTokProcessedElementSet(existingElements: Iterable<Element>): WeakSet<Element> {
+  const processedElements = new WeakSet<Element>();
+  for (const element of existingElements) {
+    processedElements.add(element);
+  }
+  return processedElements;
+}
+
 function init(): void {
   ipcRenderer.send("source:ready", {
     platform,
@@ -91,14 +98,20 @@ function currentCommentElements(): Element[] {
 }
 
 function setupCommentObserver(): void {
-  const takeNewComment = createCommentTracker(extractTikTokComment, currentCommentElements());
+  // Keep this state local: sandboxed Electron preloads cannot require local CommonJS modules without bundling.
+  const processedElements = createTikTokProcessedElementSet(currentCommentElements());
 
   function processElement(el: Element): void {
-    const comment = takeNewComment(el);
+    if (processedElements.has(el)) {
+      return;
+    }
+
+    const comment = extractTikTokComment(el);
     if (!comment) {
       return;
     }
 
+    processedElements.add(el);
     console.log(`[TIKTOK_CONNECTOR] Detected comment from ${comment.username}: ${comment.text}`);
     ipcRenderer.send("source:comment", {
       platform,

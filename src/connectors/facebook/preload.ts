@@ -1,5 +1,4 @@
 import { ipcRenderer } from "electron";
-import { createCommentTracker } from "../comment-tracker";
 
 const platform = "facebook" as const;
 
@@ -66,6 +65,14 @@ export function extractFacebookComment(article: Element): FacebookCommentPayload
   return { username, text };
 }
 
+export function createFacebookProcessedArticleSet(existingArticles: Iterable<Element>): WeakSet<Element> {
+  const processedArticles = new WeakSet<Element>();
+  for (const article of existingArticles) {
+    processedArticles.add(article);
+  }
+  return processedArticles;
+}
+
 function init(): void {
   ipcRenderer.send("source:ready", {
     platform,
@@ -85,17 +92,22 @@ if (typeof document !== "undefined") {
 }
 
 function setupCommentObserver(): void {
-  const takeNewComment = createCommentTracker(
-    extractFacebookComment,
+  // Keep this state local: sandboxed Electron preloads cannot require local CommonJS modules without bundling.
+  const processedArticles = createFacebookProcessedArticleSet(
     document.querySelectorAll('[role="article"]'),
   );
 
   function processArticle(article: Element): void {
-    const comment = takeNewComment(article);
+    if (processedArticles.has(article)) {
+      return;
+    }
+
+    const comment = extractFacebookComment(article);
     if (!comment) {
       return;
     }
 
+    processedArticles.add(article);
     console.log(`[FB_CONNECTOR] Detected comment from ${comment.username}: ${comment.text}`);
     ipcRenderer.send("source:comment", {
       platform,

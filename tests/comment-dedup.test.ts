@@ -9,10 +9,7 @@ describe('comment deduplication', () => {
     expect(dedup.isDuplicate('Alice', 'áo size M còn không', now)).toBe(false);
     dedup.record('Alice', 'áo size M còn không', now);
 
-    // Second time -> duplicate
     expect(dedup.isDuplicate('Alice', 'áo size M còn không', now + 1000)).toBe(true);
-
-    // Case-insensitive username and text
     expect(dedup.isDuplicate('alice', 'ÁO SIZE M CÒN KHÔNG', now + 2000)).toBe(true);
   });
 
@@ -39,5 +36,15 @@ describe('comment deduplication', () => {
     dedup.record('Alice', 'chào shop', now);
     expect(dedup.isDuplicate('Alice', 'chào shop', now + 2000)).toBe(true);
     expect(dedup.isDuplicate('Alice', 'chào shop', now + 6000)).toBe(false);
+  });
+
+  it('does not collide when usernames or comment text contain colons', () => {
+    const dedup = new CommentDedup();
+    const now = 100000;
+
+    dedup.record('a:b', 'c', now);
+
+    expect(dedup.isDuplicate('a', 'b:c', now + 1000)).toBe(false);
+    expect(dedup.isDuplicate('a:b', 'c', now + 1000)).toBe(true);
   });
 });

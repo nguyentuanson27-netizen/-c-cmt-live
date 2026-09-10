@@ -1,6 +1,8 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import type { Comment } from "../core/comment";
 
+export type EdgeTtsClient = Pick<MsEdgeTTS, "setMetadata" | "toStream">;
+
 export function formatCommentForTTS(comment: Comment): string {
   return `${comment.username}: ${comment.text}`;
 }
@@ -19,22 +21,25 @@ export type TTSServiceOptions = {
   rate?: string;
   volume?: string;
   pitch?: string;
+  clientFactory?: () => EdgeTtsClient;
 };
 
 export class TTSService {
-  private client: MsEdgeTTS | null = null;
+  private client: EdgeTtsClient | null = null;
   private voice: string;
   private outputFormat: OUTPUT_FORMAT;
   private initPromise: Promise<void> | null = null;
+  private readonly clientFactory: () => EdgeTtsClient;
 
   constructor(options?: TTSServiceOptions) {
     this.voice = options?.voice ?? "vi-VN-HoaiMyNeural";
     this.outputFormat = OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3;
+    this.clientFactory = options?.clientFactory ?? (() => new MsEdgeTTS());
   }
 
   private async ensureInit(): Promise<void> {
     if (!this.client) {
-      this.client = new MsEdgeTTS();
+      this.client = this.clientFactory();
       this.initPromise = this.client.setMetadata(this.voice, this.outputFormat);
     }
     if (this.initPromise) {

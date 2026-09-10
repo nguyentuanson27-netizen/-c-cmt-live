@@ -14,7 +14,10 @@ export class CommentDedup {
   }
 
   private makeKey(username: string, text: string): string {
-    return `${username.toLowerCase().trim()}:${text.toLowerCase().trim()}`;
+    return JSON.stringify([
+      username.toLowerCase().trim(),
+      text.toLowerCase().trim(),
+    ]);
   }
 
   public isDuplicate(username: string, text: string, now = Date.now()): boolean {
