@@ -24,7 +24,7 @@
 - [x] Add URL allowlist/source-window tests
 - [x] Commit `package-lock.json`
 - [x] Add CI with repeatable `npm ci` + typecheck + tests + build
-- [x] CI passes `npm ci`, `npm run typecheck`, `npm test`, and `npm run build` on Windows and Ubuntu (Node 24) for the previously verified head
+- [x] CI passes `npm ci`, `npm run typecheck`, `npm test`, and `npm run build` on Windows and Ubuntu (Node 24)
 - [x] Run Electron GUI and confirm source/session behavior during capture verification
 
 ## Phase 2 — Capture gate
@@ -75,7 +75,7 @@ Follow `docs/runbooks/feasibility-harness.md` and record evidence in `tasks/capt
 
 ## Phase 7 — Verify/ship
 
-- [ ] Current fixed head CI passes tests/typecheck/build
+- [x] Current fixed head CI passes tests/typecheck/build
 - [ ] Runtime-check startup baseline on current Facebook/TikTok pages
 - [ ] Runtime-check sequential TTS playback on fixed head
 - [ ] Facebook runtime 1 → 2 → up to 9 lives
