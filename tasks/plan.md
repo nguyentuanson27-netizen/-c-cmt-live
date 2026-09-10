@@ -1,315 +1,310 @@
 # Implementation Plan — Live Comment TTS MVP
 
-This plan implements the approved MVP spec in small, verifiable slices. The ordering is risk-first: prove platform capture before building the complete application around it.
+This plan implements the approved MVP spec in small, verifiable slices. Ordering is **risk-first**: prove current platform capture before building the complete queue/TTS application around it.
+
+## Source documents
+
+- `docs/specs/live-comment-tts-mvp.md` — approved contract
+- `docs/adr/0001-electron-local-browser-capture.md` — architecture rationale
+- `docs/runbooks/feasibility-harness.md` — manual GUI/login capture procedure
+- `tasks/capture-findings.md` — runtime evidence record
+- `tasks/todo.md` — execution checklist
+- `AGENTS.md` — agent rules and hard gates
 
 ## Dependency graph
 
 ```text
-Task 0 Repo/docs bootstrap
+Task 0 Docs/bootstrap
         ↓
 Task 1 Electron feasibility harness
         ↓
-Task 2 Facebook capture spike
-        ↓
-Task 3 TikTok capture spike
-        ↓
-Task 4 Shopee capture spike
-        ↓
-       GATE: all three capture routes viable
+Task 2 Facebook capture spike ─┐
+Task 3 TikTok capture spike   ├─→ HARD GATE: all three PASS
+Task 4 Shopee capture spike ──┘
         ↓
 Task 5 Core comment pipeline
         ↓
-Task 6 TTS + sequential audio queue
+Task 6 TTS + sequential playback
         ↓
-Task 7 Facebook multi-live manager
+Task 7 Facebook multi-live
+Task 8 TikTok/Shopee final integration
         ↓
-Task 8 TikTok + Shopee production connectors
+Task 9 Minimal operator UI + config
         ↓
-Task 9 Main UI + local config
-        ↓
-Task 10 Runtime verification + Windows packaging
+Task 10 Windows verification + packaging
 ```
+
+Tasks 2–4 may be investigated independently once Task 1 is runnable, but the project must not proceed past the hard gate until **all three** have runtime evidence.
 
 ---
 
-## Task 0: Repository and documentation bootstrap
+## Task 0 — Repository documentation bootstrap
 
-**Description:** Record the approved contract and make the empty repository understandable before implementation.
+**Description:** Make the project understandable and preserve the approved contract, architecture, execution order, runtime procedure, and agent constraints.
 
 **Acceptance criteria:**
-- [ ] `README.md` explains purpose, MVP limits, architecture, setup, and current status.
-- [x] Approved spec exists at `docs/specs/live-comment-tts-mvp.md`.
-- [x] Plan and checklist exist under `tasks/`.
+- [x] README explains purpose, status, setup, architecture, scope and links deeper docs.
+- [x] Approved spec, implementation plan and todo exist.
+- [x] `AGENTS.md`, architecture ADR, feasibility runbook and capture-evidence template exist.
 
 **Verification:**
-- [ ] README commands match actual repository scripts after Task 1.
-- [ ] Docs do not claim runtime behavior that has not been verified.
+- [x] README clearly distinguishes implemented vs not verified behavior.
+- [x] Runtime gate and sensitive-data rules are documented.
+- [x] Docs do not claim real platform capture has passed.
 
 **Dependencies:** None
 
-**Files likely touched:**
-- `README.md`
-- `docs/specs/live-comment-tts-mvp.md`
-- `tasks/plan.md`
-- `tasks/todo.md`
+**Files:** `README.md`, `AGENTS.md`, `docs/**`, `tasks/**`
 
-**Estimated scope:** Medium
+**Scope:** Medium
 
 ---
 
-## Task 1: Build the Electron feasibility harness
+## Task 1 — Electron feasibility harness
 
-**Description:** Create the smallest Electron + TypeScript application needed to open one remote live page with a persistent platform session and safe preload boundary. This is a developer/feasibility harness, not the final UI.
+**Description:** Provide the smallest Electron + TypeScript app required to open one platform source window with a persistent session and controlled remote-page boundary.
 
 **Acceptance criteria:**
-- [ ] App can open a user-supplied Facebook/TikTok/Shopee URL in a source `BrowserWindow`.
-- [ ] Source window uses the correct persistent `persist:*` partition, is muted, and has `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`.
-- [ ] Platform hostname is validated before navigation; unexpected popup/new-window requests are denied.
+- [x] Source URL is validated for Facebook/TikTok/Shopee.
+- [x] Source window uses `persist:<platform>`, is muted, sandboxed, isolated, and has Node integration disabled.
+- [x] Operator UI can open/close a source and open DevTools.
 
 **Verification:**
-- [ ] Type check/build command succeeds in an environment with dependencies installed.
-- [ ] Manual: open each supported platform login/live page and confirm session reuse on restart.
-- [ ] Review source-window security options against current Electron docs.
+- [ ] `npm install` succeeds and reviewed `package-lock.json` is committed.
+- [ ] `npm run typecheck`, `npm test`, `npm run build` pass with repository dependencies installed.
+- [ ] Windows GUI runtime confirms source open/login/session reuse behavior.
 
 **Dependencies:** Task 0
 
-**Files likely touched:**
-- `package.json`
-- `tsconfig.json`
-- `src/main.ts`
-- `src/security/platform-url.ts`
-- `src/windows/source-window.ts`
+**Files:** `package.json`, `tsconfig.json`, `src/main.ts`, `src/windows/source-window.ts`, `src/security/platform-url.ts`, minimal UI/tests
 
-**Estimated scope:** Medium
+**Scope:** Medium
+
+**Checkpoint:** Do not call Task 1 fully verified until GUI runtime is observed.
 
 ---
 
-## Task 2: Facebook real-comment capture spike
+## Task 2 — Facebook real-comment capture spike
 
-**Description:** Inspect a current Facebook Live page at runtime and implement only enough parser/preload logic to capture one new real comment as `{ username, text }`.
+**Description:** On a current real Facebook Live page, identify the simplest capture boundary and implement only enough connector logic to emit one real `{ username, text }` comment.
 
 **Acceptance criteria:**
-- [ ] One real Facebook Live comment reaches Electron with correct username and text.
-- [ ] Remote page receives no raw privileged Electron API.
-- [ ] Parser logic is isolated under `src/connectors/facebook/`.
+- [ ] Exact test-marker text and correct viewer username reach Electron.
+- [ ] Capture code stays under `src/connectors/facebook/` except the minimal shared IPC boundary.
+- [ ] No guessed/stale selector is treated as evidence.
 
 **Verification:**
-- [ ] Manual runtime evidence on a real Facebook Live.
-- [ ] Repeat comment/rerender does not obviously emit uncontrolled duplicates during the spike.
+- [ ] Follow `docs/runbooks/feasibility-harness.md`.
+- [ ] Repeat with at least three unique markers.
+- [ ] Record PASS evidence and capture route in `tasks/capture-findings.md`.
 
-**Dependencies:** Task 1
+**Dependencies:** Task 1 runnable on Windows GUI
 
-**Files likely touched:**
-- `src/connectors/facebook/preload.ts`
-- `src/connectors/facebook/parser.ts`
-- `src/main.ts`
+**Files likely touched:** `src/connectors/facebook/*`, minimal IPC validation, focused test if valuable
 
-**Estimated scope:** Small/Medium
+**Scope:** Small/Medium
 
 ---
 
-## Task 3: TikTok real-comment capture spike
+## Task 3 — TikTok real-comment capture spike
 
-**Description:** Inspect a current TikTok Live page and capture one new real comment as `{ username, text }` using the simplest viable page boundary.
+**Description:** On a current real TikTok LIVE, capture one new comment through the simplest viable current-page boundary.
 
 **Acceptance criteria:**
-- [ ] One real TikTok Live comment reaches Electron with correct username and text.
-- [ ] Capture logic remains isolated under `src/connectors/tiktok/`.
-- [ ] No unofficial protocol/WebSocket dependency is added unless DOM capture is proven non-viable first.
+- [ ] Exact marker text and correct viewer username reach Electron.
+- [ ] Logic stays under `src/connectors/tiktok/`.
+- [ ] Network/WebSocket/unofficial connector is considered only if DOM capture is actually non-viable.
 
 **Verification:**
-- [ ] Manual runtime evidence on a real TikTok Live.
+- [ ] Follow the runbook and repeat with at least three markers.
+- [ ] Record PASS evidence and capture route in `tasks/capture-findings.md`.
 
-**Dependencies:** Task 1
+**Dependencies:** Task 1 runnable on Windows GUI
 
-**Files likely touched:**
-- `src/connectors/tiktok/preload.ts`
-- `src/connectors/tiktok/parser.ts`
+**Files likely touched:** `src/connectors/tiktok/*`, minimal IPC validation, focused test if valuable
 
-**Estimated scope:** Small/Medium
+**Scope:** Small/Medium
 
 ---
 
-## Task 4: Shopee real-comment capture spike
+## Task 4 — Shopee real-comment capture spike
 
-**Description:** Inspect a current Shopee Live page and capture one new real comment as `{ username, text }` using the simplest viable page boundary.
+**Description:** On a current real Shopee Live page, capture one new buyer comment through the simplest viable current-page boundary.
 
 **Acceptance criteria:**
-- [ ] One real Shopee Live comment reaches Electron with correct username and text.
-- [ ] Capture logic remains isolated under `src/connectors/shopee/`.
-- [ ] Network/WebSocket or other fallback is considered only if DOM capture is proven non-viable.
+- [ ] Exact marker text and correct buyer username reach Electron.
+- [ ] Logic stays under `src/connectors/shopee/`.
+- [ ] Network/WebSocket/API fallback is used only after browser DOM capture is shown insufficient.
 
 **Verification:**
-- [ ] Manual runtime evidence on a real Shopee Live.
+- [ ] Follow the runbook and repeat with at least three markers.
+- [ ] Record PASS evidence and capture route in `tasks/capture-findings.md`.
 
-**Dependencies:** Task 1
+**Dependencies:** Task 1 runnable on Windows GUI
 
-**Files likely touched:**
-- `src/connectors/shopee/preload.ts`
-- `src/connectors/shopee/parser.ts`
+**Files likely touched:** `src/connectors/shopee/*`, minimal IPC validation, focused test if valuable
 
-**Estimated scope:** Small/Medium
-
----
-
-## Feasibility checkpoint
-
-Tasks 2–4 are a hard gate.
-
-Do not build the complete queue/TTS/application UI until all three platforms have a viable, observed capture route. If one fails, update this plan with the smallest alternative for that platform before proceeding.
+**Scope:** Small/Medium
 
 ---
 
-## Task 5: Core comment pipeline with tests
+# HARD FEASIBILITY GATE
 
-**Description:** Implement normalized comment types, filtering, deduplication, bounded FIFO behavior, and stale-comment skipping using tests first.
+Do not start Tasks 5–10 until `tasks/capture-findings.md` contains real runtime evidence for:
+
+```text
+Facebook  PASS
+TikTok    PASS
+Shopee    PASS
+```
+
+If a platform fails, document the blocker and choose at most 1–2 simplest evidence-based fallback routes before changing architecture.
+
+---
+
+## Task 5 — Core comment pipeline with tests
+
+**Description:** Implement the platform-independent comment contract, normalization/filtering, deduplication, bounded FIFO queue and stale-comment skipping using tests first.
 
 **Acceptance criteria:**
-- [ ] Comment normalization rejects empty username/text and caps text to 250 characters.
-- [ ] Queue holds at most 30 waiting comments and drops the oldest waiting item on overflow.
-- [ ] Dequeue skips comments older than 30 seconds and dedup prevents recent duplicate delivery.
+- [ ] Empty username/text rejected and TTS text capped at 250 characters.
+- [ ] Recent duplicate comments are suppressed.
+- [ ] Queue holds at most 30 waiting comments, drops oldest on overflow, and skips dequeued comments older than 30 seconds.
 
 **Verification:**
-- [ ] RED observed for new behavioral tests before implementation where practical.
-- [ ] Focused tests pass.
-- [ ] Full test suite passes.
+- [ ] Focused RED→GREEN tests for new behavior where practical.
+- [ ] `npm test`, `npm run typecheck`, `npm run build` pass.
 
-**Dependencies:** Tasks 2, 3, 4
+**Dependencies:** Tasks 2, 3 and 4 PASS
 
-**Files likely touched:**
-- `src/core/comment.ts`
-- `src/core/filter.ts`
-- `src/core/dedup.ts`
-- `src/core/queue.ts`
-- `tests/*.test.ts`
+**Files likely touched:** `src/core/comment.ts`, `filter.ts`, `dedup.ts`, `queue.ts`, focused tests
 
-**Estimated scope:** Medium
+**Scope:** Medium
 
 ---
 
-## Task 6: Edge TTS and sequential playback
+## Task 6 — Edge TTS + sequential local playback
 
-**Description:** Convert a validated comment to exactly `Tên khách: comment`, synthesize via `msedge-tts`, and play one item at a time through the local app renderer.
+**Description:** Format accepted comments as exactly `Tên khách: comment`, synthesize via `msedge-tts`, and play one audio item at a time in the local renderer.
 
 **Acceptance criteria:**
 - [ ] Spoken text contains username + comment only; no platform/Page prefix.
 - [ ] Queue advances only after current audio ends/fails.
-- [ ] One failure retries once, then skips without blocking later comments.
+- [ ] One playback/synthesis failure retries once, then skips without blocking the queue.
 
 **Verification:**
-- [ ] TTS-format tests pass.
-- [ ] Manual: test Vietnamese voice playback and two queued comments without overlap.
+- [ ] Formatting and queue-state tests pass.
+- [ ] Manual Vietnamese playback verifies two queued comments do not overlap.
+- [ ] Full repository checks pass.
 
 **Dependencies:** Task 5
 
-**Files likely touched:**
-- `src/core/tts.ts`
-- `src/core/queue.ts`
-- `src/ui/preload.ts`
-- `src/ui/renderer.ts`
-- `tests/tts-format.test.ts`
+**Files likely touched:** `src/core/tts.ts`, queue integration, `src/ui/*`, focused tests
 
-**Estimated scope:** Medium
+**Scope:** Medium
+
+**Checkpoint:** Verify TTS path before adding Facebook multi-window complexity.
 
 ---
 
-## Task 7: Facebook multi-live manager
+## Task 7 — Facebook 1–9 live manager
 
-**Description:** Extend the proven Facebook source from one live to 1–9 source windows sharing one `persist:facebook` session and one comment queue.
+**Description:** Extend the proven Facebook connector from one source to up to 9 source windows sharing one `persist:facebook` session and one global comment queue.
 
 **Acceptance criteria:**
-- [ ] 1–9 Facebook live sources can be started/stopped independently.
-- [ ] One source failure does not stop other active sources.
-- [ ] All accepted comments merge into the same FIFO queue while retaining source label for UI/debug only.
+- [ ] Sources start/stop independently.
+- [ ] One source failure does not stop other Facebook sources.
+- [ ] Accepted comments merge into one FIFO queue while retaining source label for UI/debug only.
 
 **Verification:**
-- [ ] Manual: 2 concurrent lives first, then test up to 9 on the target Windows machine.
-- [ ] Observe CPU/RAM before making any performance optimization.
+- [ ] Runtime verify 2 concurrent live pages first.
+- [ ] Runtime test progressively up to 9 on the target Windows machine.
+- [ ] Observe CPU/RAM before changing performance settings.
 
-**Dependencies:** Tasks 5, 6
+**Dependencies:** Tasks 5 and 6, Facebook spike proven
 
-**Files likely touched:**
-- `src/connectors/facebook/manager.ts`
-- `src/windows/source-window.ts`
-- `src/main.ts`
-- relevant tests
+**Files likely touched:** `src/connectors/facebook/manager.ts`, source-window lifecycle, main integration, focused tests
 
-**Estimated scope:** Medium
+**Scope:** Medium
 
 ---
 
-## Task 8: Finalize TikTok and Shopee connectors
+## Task 8 — Final TikTok and Shopee integration
 
-**Description:** Connect the proven spike implementations to the common comment pipeline and single-live lifecycle.
+**Description:** Connect the proven single-live TikTok and Shopee capture routes to the common pipeline/TTS lifecycle.
 
 **Acceptance criteria:**
-- [ ] TikTok mode supports one live/session and feeds the global queue.
-- [ ] Shopee mode supports one live/session and feeds the global queue.
-- [ ] Switching mode stops previous platform sources and clears waiting queue items.
+- [ ] TikTok mode supports one live/session.
+- [ ] Shopee mode supports one live/session.
+- [ ] Switching platform mode stops previous sources and clears waiting queue items.
 
 **Verification:**
-- [ ] Manual runtime test on one TikTok Live.
-- [ ] Manual runtime test on one Shopee Live.
+- [ ] Real TikTok runtime comment → TTS path passes.
+- [ ] Real Shopee runtime comment → TTS path passes.
+- [ ] Repository checks pass.
 
-**Dependencies:** Tasks 5, 6
+**Dependencies:** Tasks 5 and 6, TikTok/Shopee spikes proven
 
-**Files likely touched:**
-- `src/connectors/tiktok/*`
-- `src/connectors/shopee/*`
-- `src/main.ts`
+**Files likely touched:** `src/connectors/tiktok/*`, `src/connectors/shopee/*`, main lifecycle
 
-**Estimated scope:** Medium
+**Scope:** Medium
 
 ---
 
-## Task 9: Minimal main UI and local config
+## Task 9 — Minimal operator UI + local config
 
-**Description:** Add the small operator UI described in the spec and persist non-sensitive settings/URLs in Electron `userData` JSON.
+**Description:** Replace the developer harness UI with the agreed operator controls and persist only non-sensitive URLs/settings in Electron `userData` JSON.
 
 **Acceptance criteria:**
-- [ ] Platform selector, source URL controls, TTS controls, queue status, and recent comments work.
-- [ ] Facebook supports up to 9 URL rows; TikTok/Shopee one URL each.
-- [ ] Config stores URLs/settings only and does not store passwords/tokens/cookie dumps.
+- [ ] Facebook has up to 9 URL rows; TikTok/Shopee have one URL each.
+- [ ] TTS controls/status, queue size and recent comments are visible.
+- [ ] Config never stores passwords, token/cookie dumps or auth headers.
 
 **Verification:**
-- [ ] Keyboard-accessible native controls are usable.
+- [ ] Native controls usable by keyboard.
 - [ ] Restart app and confirm non-sensitive config persists.
+- [ ] Full repository checks pass.
 
-**Dependencies:** Tasks 7, 8
+**Dependencies:** Tasks 7 and 8
 
-**Files likely touched:**
-- `public/index.html`
-- `public/app.css`
-- `src/ui/renderer.ts`
-- `src/core/config.ts`
+**Files likely touched:** `public/index.html`, `public/app.css`, `src/ui/*`, `src/core/config.ts`
 
-**Estimated scope:** Medium
+**Scope:** Medium
 
 ---
 
-## Task 10: Final verification and Windows packaging
+## Task 10 — Final Windows verification + packaging
 
-**Description:** Run repository checks, verify the real runtime acceptance criteria, then select the simplest Windows packaging tool needed for internal distribution.
+**Description:** Prove the agreed runtime contract on the target Windows environment, then choose the simplest packaging tool required for internal distribution.
 
 **Acceptance criteria:**
 - [ ] Tests/typecheck/build pass.
-- [ ] Facebook/TikTok/Shopee runtime acceptance criteria pass on Windows.
+- [ ] Facebook/TikTok/Shopee runtime acceptance criteria pass.
 - [ ] A repeatable Windows package/install command is documented.
 
 **Verification:**
-- [ ] Full Definition of Done reviewed.
-- [ ] Security review for remote BrowserWindows and IPC completed.
-- [ ] README reflects actual commands and known platform limitations.
+- [ ] Facebook 1 → 2 → up to 9 live runtime evidence.
+- [ ] TikTok and Shopee end-to-end runtime evidence.
+- [ ] Background/minimized source behavior checked; only then consider throttling changes.
+- [ ] Security review covers remote BrowserWindows, navigation, IPC and sensitive logging.
+- [ ] README and todo reflect current truth.
 
-**Dependencies:** Tasks 7, 8, 9
+**Dependencies:** Tasks 7, 8 and 9
 
-**Files likely touched:**
-- packaging config chosen at this task
-- `README.md`
-- possibly `package.json`
+**Files:** packaging config selected at this task, README/package scripts as needed
 
-**Estimated scope:** Medium
+**Scope:** Medium
 
-## Current execution boundary
+---
 
-The repository can be bootstrapped and Task 1 can be implemented from this environment. Tasks 2–4 require manual runtime access to authenticated/current livestream pages. Until that evidence exists, later tasks remain intentionally blocked by the approved feasibility gate.
+## Project completion gate
+
+The MVP is complete only when task acceptance criteria **and** the project Definition of Done are satisfied. In particular:
+
+- runtime behavior is actually observed where relevant;
+- changed behavior has appropriate tests;
+- repository checks pass;
+- error paths are handled;
+- docs describe current truth;
+- untrusted remote-page/comment boundaries are reviewed;
+- no unrelated refactor or speculative infrastructure is introduced.
