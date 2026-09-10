@@ -6,6 +6,11 @@
 - [x] Save approved MVP spec
 - [x] Save implementation plan
 - [x] Replace bootstrap README with full project README
+- [x] Add `AGENTS.md` with agent scope/gate/security rules
+- [x] Record Electron/browser-capture architecture decision
+- [x] Add GUI/login feasibility runbook
+- [x] Add runtime capture findings template
+- [x] Link the documentation set from README
 
 ## Phase 1 — Feasibility harness
 
@@ -23,10 +28,13 @@
 
 ## Phase 2 — Capture gate
 
+Follow `docs/runbooks/feasibility-harness.md` and record evidence in `tasks/capture-findings.md`.
+
 - [ ] Facebook: capture one real live comment (`username`, `text`)
 - [ ] TikTok: capture one real live comment (`username`, `text`)
 - [ ] Shopee: capture one real live comment (`username`, `text`)
 - [ ] Record observed capture strategy/selectors/network boundary for each platform
+- [ ] Mark feasibility decision `GO` only after all three platform rows are PASS
 
 > Hard gate: do not proceed to full queue/TTS implementation until all three platforms have a viable runtime capture route.
 
