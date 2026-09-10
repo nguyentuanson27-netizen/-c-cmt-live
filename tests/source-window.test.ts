@@ -1,32 +1,45 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSourceWindow } from "../src/windows/source-window";
 
-const mockSetPermissionCheckHandler = vi.fn();
-const mockSetPermissionRequestHandler = vi.fn();
-const mockSetAudioMuted = vi.fn();
-const mockSetWindowOpenHandler = vi.fn();
-const mockOn = vi.fn();
-const mockLoadURL = vi.fn();
-const mockFromPartition = vi.fn(() => ({
-  setPermissionCheckHandler: mockSetPermissionCheckHandler,
-  setPermissionRequestHandler: mockSetPermissionRequestHandler,
-}));
-const mockBrowserWindow = vi.fn(function MockBrowserWindow() {
+const mocks = vi.hoisted(() => {
+  const setPermissionCheckHandler = vi.fn();
+  const setPermissionRequestHandler = vi.fn();
+  const setAudioMuted = vi.fn();
+  const setWindowOpenHandler = vi.fn();
+  const on = vi.fn();
+  const loadURL = vi.fn();
+  const fromPartition = vi.fn(() => ({
+    setPermissionCheckHandler,
+    setPermissionRequestHandler,
+  }));
+  const BrowserWindow = vi.fn(function MockBrowserWindow() {
+    return {
+      webContents: {
+        setAudioMuted,
+        setWindowOpenHandler,
+        on,
+      },
+      loadURL,
+    };
+  });
+
   return {
-    webContents: {
-      setAudioMuted: mockSetAudioMuted,
-      setWindowOpenHandler: mockSetWindowOpenHandler,
-      on: mockOn,
-    },
-    loadURL: mockLoadURL,
+    setPermissionCheckHandler,
+    setPermissionRequestHandler,
+    setAudioMuted,
+    setWindowOpenHandler,
+    on,
+    loadURL,
+    fromPartition,
+    BrowserWindow,
   };
 });
 
 vi.mock("electron", () => ({
   session: {
-    fromPartition: mockFromPartition,
+    fromPartition: mocks.fromPartition,
   },
-  BrowserWindow: mockBrowserWindow,
+  BrowserWindow: mocks.BrowserWindow,
 }));
 
 describe("source-window security and session policy", () => {
@@ -37,8 +50,8 @@ describe("source-window security and session policy", () => {
   it("uses the platform persistent partition and secure BrowserWindow options", () => {
     createSourceWindow("tiktok", "https://www.tiktok.com/@shop/live");
 
-    expect(mockFromPartition).toHaveBeenCalledWith("persist:tiktok");
-    expect(mockBrowserWindow).toHaveBeenCalledWith(
+    expect(mocks.fromPartition).toHaveBeenCalledWith("persist:tiktok");
+    expect(mocks.BrowserWindow).toHaveBeenCalledWith(
       expect.objectContaining({
         webPreferences: expect.objectContaining({
           partition: "persist:tiktok",
@@ -53,15 +66,15 @@ describe("source-window security and session policy", () => {
   it("denies permissions by default", () => {
     createSourceWindow("facebook", "https://www.facebook.com/watch/live/");
 
-    expect(mockSetPermissionCheckHandler).toHaveBeenCalledTimes(1);
-    const checkHandler = mockSetPermissionCheckHandler.mock.calls[0][0];
+    expect(mocks.setPermissionCheckHandler).toHaveBeenCalledTimes(1);
+    const checkHandler = mocks.setPermissionCheckHandler.mock.calls[0][0];
     expect(typeof checkHandler).toBe("function");
     expect(checkHandler()).toBe(false);
     expect(checkHandler(null, "media", "https://www.facebook.com", {})).toBe(false);
     expect(checkHandler(null, "geolocation", "https://www.facebook.com", {})).toBe(false);
 
-    expect(mockSetPermissionRequestHandler).toHaveBeenCalledTimes(1);
-    const requestHandler = mockSetPermissionRequestHandler.mock.calls[0][0];
+    expect(mocks.setPermissionRequestHandler).toHaveBeenCalledTimes(1);
+    const requestHandler = mocks.setPermissionRequestHandler.mock.calls[0][0];
     const callback = vi.fn();
     requestHandler(null, "notifications", callback);
     expect(callback).toHaveBeenCalledWith(false);
@@ -70,18 +83,18 @@ describe("source-window security and session policy", () => {
   it("mutes source audio and denies popup windows", () => {
     createSourceWindow("shopee", "https://live.shopee.vn/share?from=live");
 
-    expect(mockSetAudioMuted).toHaveBeenCalledWith(true);
-    expect(mockSetWindowOpenHandler).toHaveBeenCalledTimes(1);
+    expect(mocks.setAudioMuted).toHaveBeenCalledWith(true);
+    expect(mocks.setWindowOpenHandler).toHaveBeenCalledTimes(1);
 
-    const popupHandler = mockSetWindowOpenHandler.mock.calls[0][0];
+    const popupHandler = mocks.setWindowOpenHandler.mock.calls[0][0];
     expect(popupHandler()).toEqual({ action: "deny" });
   });
 
   it("blocks navigation and redirects outside the selected platform", () => {
     createSourceWindow("facebook", "https://www.facebook.com/watch/live/");
 
-    const navigateCall = mockOn.mock.calls.find(([eventName]) => eventName === "will-navigate");
-    const redirectCall = mockOn.mock.calls.find(([eventName]) => eventName === "will-redirect");
+    const navigateCall = mocks.on.mock.calls.find(([eventName]) => eventName === "will-navigate");
+    const redirectCall = mocks.on.mock.calls.find(([eventName]) => eventName === "will-redirect");
 
     expect(navigateCall).toBeDefined();
     expect(redirectCall).toBeDefined();
@@ -104,7 +117,7 @@ describe("source-window security and session policy", () => {
   it("loads the normalized allowed URL", () => {
     createSourceWindow("tiktok", " https://www.tiktok.com/@shop/live ");
 
-    expect(mockLoadURL).toHaveBeenCalledWith("https://www.tiktok.com/@shop/live");
+    expect(mocks.loadURL).toHaveBeenCalledWith("https://www.tiktok.com/@shop/live");
   });
 
   it("rejects invalid URLs before creating a session or window", () => {
@@ -112,7 +125,7 @@ describe("source-window security and session policy", () => {
       createSourceWindow("facebook", "https://evil.com/live");
     }).toThrow(/not allowed/i);
 
-    expect(mockFromPartition).not.toHaveBeenCalled();
-    expect(mockBrowserWindow).not.toHaveBeenCalled();
+    expect(mocks.fromPartition).not.toHaveBeenCalled();
+    expect(mocks.BrowserWindow).not.toHaveBeenCalled();
   });
 });
