@@ -17,6 +17,8 @@ export function createSourceWindow(platform: Platform, inputUrl: string): Source
   const partition = `persist:${platform}`;
   const sourceSession = session.fromPartition(partition);
 
+  sourceSession.setPermissionCheckHandler(() => false);
+
   sourceSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
