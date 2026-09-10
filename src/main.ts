@@ -1,6 +1,7 @@
 import path from "node:path";
 import { app, BrowserWindow, ipcMain, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 import { isPlatform, type Platform } from "./platform";
+import { getTrustedPlaybackFinishedPayload } from "./security/ipc";
 import { isAllowedPlatformUrl } from "./security/platform-url";
 import { createSourceWindow, type SourceWindow } from "./windows/source-window";
 import type { Comment } from "./core/comment";
@@ -49,13 +50,22 @@ const playbackManager = new PlaybackManager(commentQueue, ttsService, {
     if (!targetWin || targetWin.isDestroyed()) {
       return { success: false };
     }
+
     return new Promise((resolve) => {
-      const handler = (_event: IpcMainEvent, payload: { id: string; success: boolean }) => {
-        if (payload?.id === id) {
-          ipcMain.removeListener("tts:playback-finished", handler);
-          clearTimeout(timeoutId);
-          resolve({ success: payload.success });
+      const handler = (event: IpcMainEvent, payload: unknown) => {
+        const completion = getTrustedPlaybackFinishedPayload(
+          event.sender.id,
+          targetWin.webContents.id,
+          payload,
+          id,
+        );
+        if (!completion) {
+          return;
         }
+
+        ipcMain.removeListener("tts:playback-finished", handler);
+        clearTimeout(timeoutId);
+        resolve({ success: completion.success });
       };
 
       const timeoutId = setTimeout(() => {
@@ -242,19 +252,16 @@ ipcMain.on("source:comment", (event: IpcMainEvent, payload: unknown) => {
     return;
   }
 
-  // 1. Filter & Normalize
   const normalized = normalizeComment(comment.username, comment.text);
   if (!normalized) {
     return;
   }
 
-  // 2. Deduplicate
   if (commentDedup.isDuplicate(normalized.username, normalized.text)) {
     return;
   }
   commentDedup.record(normalized.username, normalized.text);
 
-  // 3. Enqueue
   const item: Comment = {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     platform: activeSource.platform,
@@ -268,10 +275,18 @@ ipcMain.on("source:comment", (event: IpcMainEvent, payload: unknown) => {
   commentQueue.enqueue(item);
   emitTtsStatus();
 
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("comment:accepted", {
+      platform: item.platform,
+      sourceLabel: item.sourceLabel,
+      username: item.username,
+      text: item.text,
+    });
+  }
+
   console.log(`[REAL COMMENT CAPTURED] [${activeSource.platform}] ${normalized.username}: ${normalized.text}`);
   emitStatus(`[${activeSource.platform}] ${normalized.username}: ${normalized.text}`);
 
-  // 4. Trigger playback
   void playbackManager.processNext();
 });
 

@@ -1,4 +1,5 @@
 import { ipcRenderer } from "electron";
+import { createCommentTracker } from "../comment-tracker";
 
 const platform = "facebook" as const;
 
@@ -8,7 +9,6 @@ export type FacebookCommentPayload = {
 };
 
 export function extractFacebookComment(article: Element): FacebookCommentPayload | null {
-  // 1. Username extraction
   let username = "";
 
   const aria = article.getAttribute("aria-label") || "";
@@ -31,7 +31,7 @@ export function extractFacebookComment(article: Element): FacebookCommentPayload
 
   if (!username) {
     const anyLink = Array.from(article.querySelectorAll("a")).find(
-      (a) => a.textContent?.trim() && !a.querySelector("img")
+      (a) => a.textContent?.trim() && !a.querySelector("img"),
     );
     if (anyLink && anyLink.textContent?.trim()) {
       username = anyLink.textContent.trim();
@@ -42,7 +42,6 @@ export function extractFacebookComment(article: Element): FacebookCommentPayload
     return null;
   }
 
-  // 2. Text extraction
   const candidates = Array.from(article.querySelectorAll('div[dir="auto"], span[dir="auto"]'));
   let text = "";
   const IGNORED_ACTIONS = ["Thích", "Phản hồi", "Chia sẻ", "Dịch", "Like", "Reply", "Share", "Translate"];
@@ -86,19 +85,16 @@ if (typeof document !== "undefined") {
 }
 
 function setupCommentObserver(): void {
-  const seenComments = new Set<string>();
+  const takeNewComment = createCommentTracker(
+    extractFacebookComment,
+    document.querySelectorAll('[role="article"]'),
+  );
 
   function processArticle(article: Element): void {
-    const comment = extractFacebookComment(article);
+    const comment = takeNewComment(article);
     if (!comment) {
       return;
     }
-
-    const key = `${comment.username}:${comment.text}`;
-    if (seenComments.has(key)) {
-      return;
-    }
-    seenComments.add(key);
 
     console.log(`[FB_CONNECTOR] Detected comment from ${comment.username}: ${comment.text}`);
     ipcRenderer.send("source:comment", {
@@ -108,10 +104,6 @@ function setupCommentObserver(): void {
     });
   }
 
-  // Scan existing articles
-  document.querySelectorAll('[role="article"]').forEach(processArticle);
-
-  // Observe dynamically added articles
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       for (const node of Array.from(mutation.addedNodes)) {

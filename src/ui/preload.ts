@@ -18,6 +18,13 @@ export type TtsStatusPayload = {
   isPaused: boolean;
 };
 
+export type AcceptedCommentPayload = {
+  platform: Platform;
+  sourceLabel?: string;
+  username: string;
+  text: string;
+};
+
 contextBridge.exposeInMainWorld("liveCommentTts", {
   openSource: (platform: Platform, url: string) => ipcRenderer.invoke("source:open", { platform, url }),
   closeSource: () => ipcRenderer.invoke("source:close"),
@@ -26,6 +33,11 @@ contextBridge.exposeInMainWorld("liveCommentTts", {
     const listener = (_event: unknown, status: SourceStatus) => callback(status);
     ipcRenderer.on("source:status", listener);
     return () => ipcRenderer.removeListener("source:status", listener);
+  },
+  onCommentAccepted: (callback: (comment: AcceptedCommentPayload) => void) => {
+    const listener = (_event: unknown, comment: AcceptedCommentPayload) => callback(comment);
+    ipcRenderer.on("comment:accepted", listener);
+    return () => ipcRenderer.removeListener("comment:accepted", listener);
   },
   onPlayAudio: (callback: (payload: PlayAudioPayload) => void) => {
     const listener = (_event: unknown, payload: PlayAudioPayload) => callback(payload);

@@ -1,11 +1,13 @@
 import type { Platform } from "../platform";
-import type { PlayAudioPayload, SourceStatus, TtsStatusPayload } from "./preload";
+import { toRecentCommentView } from "./recent-comment";
+import type { AcceptedCommentPayload, PlayAudioPayload, SourceStatus, TtsStatusPayload } from "./preload";
 
 type LiveCommentTtsApi = {
   openSource(platform: Platform, url: string): Promise<{ ok: boolean; error?: string }>;
   closeSource(): Promise<{ ok: boolean }>;
   openDevTools(): Promise<{ ok: boolean; error?: string }>;
   onSourceStatus(callback: (status: SourceStatus) => void): () => void;
+  onCommentAccepted(callback: (comment: AcceptedCommentPayload) => void): () => void;
   onPlayAudio(callback: (payload: PlayAudioPayload) => void): () => void;
   sendPlaybackFinished(id: string, success: boolean, error?: string): void;
   toggleTts(): Promise<{ ok: boolean; isPaused: boolean }>;
@@ -71,10 +73,12 @@ devToolsButton.addEventListener("click", async () => {
 
 window.liveCommentTts.onSourceStatus((status) => {
   setStatus(status.message, status.level);
-  addRecentComment(status.message);
 });
 
-// TTS audio playback
+window.liveCommentTts.onCommentAccepted((comment) => {
+  addRecentComment(comment);
+});
+
 let currentAudio: HTMLAudioElement | null = null;
 
 window.liveCommentTts.onPlayAudio((payload) => {
@@ -107,7 +111,6 @@ window.liveCommentTts.onPlayAudio((payload) => {
   }
 });
 
-// TTS UI controls
 if (toggleTtsButton) {
   toggleTtsButton.addEventListener("click", async () => {
     const res = await window.liveCommentTts.toggleTts();
@@ -136,14 +139,12 @@ window.liveCommentTts.onTtsStatus((status) => {
   }
 });
 
-function addRecentComment(rawText: string): void {
-  if (!recentCommentsElement) return;
+function addRecentComment(comment: AcceptedCommentPayload): void {
+  if (!recentCommentsElement) {
+    return;
+  }
 
-  const match = rawText.match(/^\[(facebook|tiktok|shopee)\]\s+([^:]+):\s+(.*)$/);
-  if (!match) return;
-
-  const [, platform, username, text] = match;
-
+  const view = toRecentCommentView(comment);
   const firstPlaceholder = recentCommentsElement.querySelector("p");
   if (firstPlaceholder && firstPlaceholder.textContent?.includes("Chưa có")) {
     recentCommentsElement.innerHTML = "";
@@ -154,14 +155,14 @@ function addRecentComment(rawText: string): void {
 
   const badge = document.createElement("span");
   badge.className = "comment-platform-badge";
-  badge.textContent = platform.toUpperCase();
+  badge.textContent = view.platformLabel;
 
   const author = document.createElement("span");
   author.className = "comment-author";
-  author.textContent = username + ": ";
+  author.textContent = view.authorText;
 
   const content = document.createElement("span");
-  content.textContent = text;
+  content.textContent = view.contentText;
 
   item.appendChild(badge);
   item.appendChild(author);
@@ -169,7 +170,6 @@ function addRecentComment(rawText: string): void {
 
   recentCommentsElement.prepend(item);
 
-  // Keep max 50 in view
   while (recentCommentsElement.children.length > 50) {
     recentCommentsElement.removeChild(recentCommentsElement.lastChild!);
   }

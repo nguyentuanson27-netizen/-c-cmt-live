@@ -5,6 +5,15 @@ export function formatCommentForTTS(comment: Comment): string {
   return `${comment.username}: ${comment.text}`;
 }
 
+export function escapeXmlForSsml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 export type TTSServiceOptions = {
   voice?: string;
   rate?: string;
@@ -44,7 +53,7 @@ export class TTSService {
     await this.ensureInit();
     return new Promise((resolve, reject) => {
       try {
-        const { audioStream } = this.client!.toStream(text);
+        const { audioStream } = this.client!.toStream(escapeXmlForSsml(text));
         const chunks: Buffer[] = [];
 
         const timeout = setTimeout(() => {

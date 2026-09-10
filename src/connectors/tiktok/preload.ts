@@ -1,4 +1,5 @@
 import { ipcRenderer } from "electron";
+import { createCommentTracker } from "../comment-tracker";
 
 const platform = "tiktok" as const;
 
@@ -12,7 +13,6 @@ export function extractTikTokComment(el: Element): TikTokCommentPayload | null {
     ? el
     : el.querySelector?.('[data-e2e="chat-message"]') || el;
 
-  // 1. Username extraction
   let username = "";
   const ownerEl = messageEl.querySelector?.('[data-e2e="message-owner-name"]');
   if (ownerEl) {
@@ -28,7 +28,6 @@ export function extractTikTokComment(el: Element): TikTokCommentPayload | null {
     return null;
   }
 
-  // 2. Text extraction
   let text = "";
   const textEl = messageEl.querySelector?.('.break-words, [class*="break-words"]');
   if (textEl) {
@@ -49,7 +48,6 @@ export function extractTikTokComment(el: Element): TikTokCommentPayload | null {
     }
   }
 
-  // Clean up leading colons or whitespace
   text = text.replace(/^[:\s]+/, "").trim();
 
   const IGNORED_SYSTEM_TEXTS = ["joined", "đã tham gia", "shared", "đã chia sẻ", "followed", "đã follow"];
@@ -78,20 +76,28 @@ if (typeof document !== "undefined") {
   }
 }
 
+function currentCommentElements(): Element[] {
+  const elements = new Set<Element>();
+
+  document.querySelectorAll('[data-e2e="chat-message"]').forEach((element) => elements.add(element));
+  document.querySelectorAll('[data-index]').forEach((item) => {
+    const message = item.querySelector('[data-e2e="chat-message"]');
+    if (message) {
+      elements.add(message);
+    }
+  });
+
+  return Array.from(elements);
+}
+
 function setupCommentObserver(): void {
-  const seenComments = new Set<string>();
+  const takeNewComment = createCommentTracker(extractTikTokComment, currentCommentElements());
 
   function processElement(el: Element): void {
-    const comment = extractTikTokComment(el);
+    const comment = takeNewComment(el);
     if (!comment) {
       return;
     }
-
-    const key = `${comment.username}:${comment.text}`;
-    if (seenComments.has(key)) {
-      return;
-    }
-    seenComments.add(key);
 
     console.log(`[TIKTOK_CONNECTOR] Detected comment from ${comment.username}: ${comment.text}`);
     ipcRenderer.send("source:comment", {
@@ -102,19 +108,9 @@ function setupCommentObserver(): void {
   }
 
   function scanAll(): void {
-    document.querySelectorAll('[data-e2e="chat-message"]').forEach(processElement);
-    document.querySelectorAll('[data-index]').forEach((item) => {
-      const msg = item.querySelector('[data-e2e="chat-message"]');
-      if (msg) {
-        processElement(msg);
-      }
-    });
+    currentCommentElements().forEach(processElement);
   }
 
-  // Scan existing comments immediately
-  scanAll();
-
-  // Periodic scan to catch initial streaming or virtualized loading
   let scanCount = 0;
   const intervalId = setInterval(() => {
     scanAll();
@@ -124,7 +120,6 @@ function setupCommentObserver(): void {
     }
   }, 1000);
 
-  // Observe dynamically added comment elements
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       for (const node of Array.from(mutation.addedNodes)) {
