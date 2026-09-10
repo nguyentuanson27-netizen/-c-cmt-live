@@ -9,7 +9,7 @@ Read these before changing code:
 1. `docs/specs/live-comment-tts-mvp.md` — approved product/technical contract.
 2. `tasks/plan.md` — ordered implementation plan and gates.
 3. `tasks/todo.md` — current execution status.
-4. `docs/runbooks/feasibility-harness.md` — manual runtime procedure for the three capture spikes.
+4. `docs/runbooks/feasibility-harness.md` — manual runtime procedure for the platform capture spikes.
 5. `tasks/capture-findings.md` — record runtime evidence here.
 6. `docs/adr/0001-electron-local-browser-capture.md` — architecture rationale.
 
@@ -17,11 +17,14 @@ If docs conflict, the approved MVP spec wins unless the user explicitly changes 
 
 ## Current hard gate
 
-Do **not** build the full queue/TTS/multi-live application until all three current live platforms have a proven runtime capture route:
+The approved scope amendment on 2026-09-10 defers Shopee capture/integration while Facebook and TikTok are completed first.
+
+Before building the shared core/TTS path, require proven runtime capture for:
 
 - Facebook Live: real `username + text`
 - TikTok Live: real `username + text`
-- Shopee Live: real `username + text`
+
+Shopee Live is currently deferred and does **not** block the Facebook/TikTok core, TTS, or Facebook multi-live work. However, the full three-platform MVP must not be called complete until Shopee also has a proven runtime capture route and is integrated end-to-end.
 
 A platform is not PASS because a selector looks plausible. PASS requires a real new comment observed end-to-end on a current livestream page.
 
@@ -39,7 +42,7 @@ A platform is not PASS because a selector looks plausible. PASS requires a real 
 
 ## Security minimum
 
-Remote Facebook/TikTok/Shopee pages are untrusted input.
+Remote Facebook/TikTok/Shopee pages and livestream comments are untrusted input.
 
 Always preserve:
 
@@ -50,6 +53,7 @@ Always preserve:
 - platform URL allowlist
 - unexpected popup/new-window blocking
 - IPC sender + payload validation
+- output encoding/sanitization before embedding comment text into another format such as SSML
 
 Never expose raw `ipcRenderer`, `require`, `fs`, `shell`, or other Node privileges to remote pages.
 
@@ -77,21 +81,19 @@ Never mark a task complete because code compiles visually or because a previous 
 For repository checks, use the commands that actually exist in `package.json`, currently:
 
 ```bash
-npm install
+npm ci
 npm run typecheck
 npm test
 npm run build
 npm run dev
 ```
 
-If `package-lock.json` exists later, prefer `npm ci` for repeatable installs.
-
 ## Runtime evidence
 
 For each capture spike, record in `tasks/capture-findings.md`:
 
 - platform
-- PASS/FAIL
+- PASS/FAIL/DEFERRED
 - test marker used
 - observed username
 - observed exact comment text

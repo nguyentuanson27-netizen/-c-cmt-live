@@ -4,64 +4,63 @@
 
 - Facebook Live
 - TikTok Live
-- Shopee Live
+- Shopee Live (đang deferred)
 
 Mục tiêu của project là **chạy được, dễ sửa, không over-engineer**. Đây không phải SaaS và không xây backend/database nếu MVP chưa cần.
 
 ## Trạng thái hiện tại
 
-Repository đang ở **feasibility phase**.
+Repository đã qua feasibility cho **Facebook + TikTok** và đang ở giai đoạn **core/TTS + platform integration**.
 
 Đã có:
 
 - Electron + TypeScript scaffold;
-- local feasibility UI;
-- mở một source window theo Facebook/TikTok/Shopee;
 - persistent browser session theo platform;
-- remote window sandboxed, Node integration tắt, context isolation bật;
+- source BrowserWindow sandboxed, `nodeIntegration: false`, `contextIsolation: true`;
 - livestream audio bị mute;
-- platform URL allowlist;
-- unexpected popup/new-window bị chặn;
-- nút mở DevTools để inspect live page hiện tại;
-- URL allowlist/source-window security tests;
+- platform URL allowlist và popup/navigation restrictions;
+- Facebook real-comment parser/capture đã có runtime evidence;
+- TikTok real-comment parser/capture đã có runtime evidence;
+- startup baseline để comment đã có sẵn trong DOM không bị coi là comment mới;
+- core normalize/filter/dedup/bounded FIFO queue + stale skip;
+- `msedge-tts` với voice mặc định `vi-VN-HoaiMyNeural`;
+- sequential playback, retry một lần rồi skip khi lỗi;
+- XML/SSML escaping cho comment text trước khi gửi vào TTS library;
+- playback-completion IPC kiểm tra sender, playback id và payload shape;
+- TTS status, pause/resume, clear queue và recent comment view;
+- recent comment UI nhận structured payload, không parse lại status string;
 - `package-lock.json`;
-- GitHub Actions CI chạy `npm ci` + `npm run typecheck` + `npm test` + `npm run build` trên Windows và Ubuntu với Node 24;
-- spec, plan, agent rules, architecture decision, feasibility runbook và capture-evidence template.
+- GitHub Actions CI chạy `npm ci` + typecheck + tests + build trên Windows và Ubuntu với Node 24.
 
-**Chưa có:** parser comment thật, queue TTS hoàn chỉnh, Facebook multi-live, Windows installer.
+Chưa hoàn tất:
 
-Đây là chủ ý của spec: phải chứng minh được cách bắt **một comment thật** trên cả Facebook, TikTok và Shopee trước khi build phần còn lại.
+- Facebook manager cho 1–9 live đồng thời;
+- Shopee real-comment capture/integration (deferred theo scope amendment ngày 2026-09-10);
+- local JSON config cho operator settings;
+- final Windows runtime verification/packaging.
+
+Shopee deferred **không block** shared core/TTS hoặc Facebook/TikTok work, nhưng full three-platform MVP chưa được coi là hoàn thành cho đến khi Shopee được prove và integrate end-to-end.
 
 ## Tài liệu project
 
 | File | Mục đích |
 |---|---|
-| `AGENTS.md` | Quy tắc cho coding agent: scope, hard gate, security và verification honesty |
-| `docs/specs/live-comment-tts-mvp.md` | Product/technical contract đã chốt |
-| `docs/adr/0001-electron-local-browser-capture.md` | Lý do chọn Electron local + browser capture và các trade-off |
-| `docs/runbooks/feasibility-harness.md` | Hướng dẫn chạy harness trên Windows GUI, chuẩn bị account và chứng minh comment thật |
+| `AGENTS.md` | Quy tắc cho coding agent: scope, gates, security và verification honesty |
+| `docs/specs/live-comment-tts-mvp.md` | Product/technical contract và scope amendment hiện tại |
+| `docs/adr/0001-electron-local-browser-capture.md` | Lý do chọn Electron local + browser capture |
+| `docs/runbooks/feasibility-harness.md` | Hướng dẫn runtime capture verification |
 | `tasks/plan.md` | Implementation plan theo dependency/risk-first |
 | `tasks/todo.md` | Checklist trạng thái hiện tại |
-| `tasks/capture-findings.md` | Template ghi bằng chứng runtime Facebook/TikTok/Shopee |
-
-Nếu chỉ muốn tiếp tục phase hiện tại, đọc theo thứ tự:
-
-```text
-AGENTS.md
-  ↓
-docs/runbooks/feasibility-harness.md
-  ↓
-tasks/capture-findings.md
-```
+| `tasks/capture-findings.md` | Runtime evidence cho từng platform |
 
 ## MVP contract
 
 ### Facebook
 
 - 1 Facebook browser session;
-- tối đa 9 Facebook Live cùng lúc sau khi feasibility gate pass;
+- tối đa 9 Facebook Live cùng lúc ở phase multi-live;
 - comment từ các live được gom vào 1 queue chung;
-- Page name chỉ hiện ở UI/log, không đọc bằng TTS.
+- Page/source label chỉ dùng ở UI/log, không đọc bằng TTS.
 
 ### TikTok
 
@@ -71,7 +70,8 @@ tasks/capture-findings.md
 ### Shopee
 
 - 1 account/session;
-- 1 live tại một thời điểm.
+- 1 live tại một thời điểm;
+- capture/integration hiện deferred và sẽ được resume trước full three-platform completion.
 
 ### Format TTS
 
@@ -81,7 +81,7 @@ Tên khách: nội dung comment
 
 Không đọc platform name hoặc Facebook Page name.
 
-## Architecture mục tiêu
+## Architecture
 
 ```text
 Remote live page(s)
@@ -108,30 +108,22 @@ MVP không dùng:
 - Playwright/Puppeteer/Selenium;
 - generic plugin framework.
 
-## Tech stack hiện tại
+## Tech stack
 
 - Electron `44.2.0`
 - TypeScript `7.0.2`
 - Vitest `5.0.0`
+- `msedge-tts` `2.0.7`
 - vanilla HTML/CSS/TypeScript
-
-`msedge-tts` sẽ chỉ được thêm ở TTS task sau khi capture gate pass.
 
 ## Quick start
 
-CI dùng Node.js 24. Dùng Node 24 cho development để khớp môi trường CI hiện tại.
-
-Clone và checkout branch đang triển khai:
+CI dùng Node.js 24. Dùng Node 24 cho development để khớp môi trường CI.
 
 ```bash
 git clone https://github.com/nguyentuanson27-netizen/-c-cmt-live.git
 cd ./-c-cmt-live
 git checkout feat/mvp-live-comment-tts
-```
-
-Cài dependency từ lockfile và kiểm tra:
-
-```bash
 npm ci
 npm run typecheck
 npm test
@@ -141,26 +133,15 @@ npm run dev
 
 `npm run dev` build TypeScript rồi mở Electron app.
 
-## Cách dùng feasibility harness
+## Capture behavior
 
-Chi tiết đầy đủ nằm ở `docs/runbooks/feasibility-harness.md`.
+Facebook và TikTok connector dùng DOM boundary đã được ghi lại trong `tasks/capture-findings.md`.
 
-Flow ngắn:
+Khi connector khởi động, các comment đang tồn tại trong DOM được đưa vào baseline dedup state nhưng **không emit** vào pipeline. Chỉ comment mới xuất hiện sau baseline mới được gửi về Electron main process.
 
-1. Chạy `npm run dev`.
-2. Chọn Facebook, TikTok hoặc Shopee.
-3. Dán URL livestream HTTPS của đúng platform.
-4. Bấm **Mở source**.
-5. Login thủ công trong source window nếu session chưa đăng nhập.
-6. Bấm **Mở DevTools**.
-7. Từ account viewer khác gửi comment marker rõ ràng.
-8. Inspect DOM trước; chỉ inspect network/WebSocket nếu DOM không khả thi.
-9. Chứng minh lấy được đúng `username + text` từ comment thật.
-10. Ghi evidence vào `tasks/capture-findings.md`.
+Platform-specific selectors/network behavior vẫn phải được runtime-verify khi platform thay đổi; unit test không thay thế real-live verification.
 
-Không đoán selector từ memory và không copy selector cũ chỉ vì nó từng hoạt động.
-
-## Browser/session behavior
+## Browser/session security
 
 Persistent partitions:
 
@@ -170,42 +151,40 @@ persist:tiktok
 persist:shopee
 ```
 
-Remote source windows:
+Remote source windows giữ các boundary tối thiểu:
 
 ```ts
 {
   nodeIntegration: false,
   contextIsolation: true,
-  sandbox: true
+  sandbox: true,
 }
 ```
 
 Ngoài ra source window:
 
 - chỉ nhận URL HTTPS thuộc domain platform tương ứng;
-- mute audio của livestream;
-- deny browser permission requests trong feasibility harness;
-- deny popup/new-window;
+- mute audio livestream;
+- deny permission requests theo policy hiện tại;
+- deny unexpected popup/new-window;
 - chặn navigation/redirect sang hostname ngoài platform;
-- preload chỉ gửi heartbeat nhỏ về main process, chưa expose API cho remote page.
+- remote preload chỉ gửi payload tối thiểu qua IPC.
 
-Lưu ý: popup SSO bên thứ ba có thể bị chặn bởi thiết kế này. Trong MVP ưu tiên login trực tiếp/QR trong cùng platform window; chỉ nới policy nếu runtime test chứng minh login thực tế cần nó.
+Main process validate sender/platform/URL/payload trước khi nhận comment. Playback completion từ renderer cũng validate sender, expected playback id và boolean `success` trước khi advance queue.
+
+Comment text là untrusted input. Spoken string vẫn có format `username: text`, nhưng XML-sensitive characters được escape ngay trước khi text được đưa vào SSML envelope của `msedge-tts`.
 
 ## Project structure
 
 ```text
 .
-├─ .github/
-│  └─ workflows/ci.yml
+├─ .github/workflows/ci.yml
 ├─ AGENTS.md
 ├─ README.md
 ├─ docs/
-│  ├─ adr/
-│  │  └─ 0001-electron-local-browser-capture.md
-│  ├─ runbooks/
-│  │  └─ feasibility-harness.md
-│  └─ specs/
-│     └─ live-comment-tts-mvp.md
+│  ├─ adr/0001-electron-local-browser-capture.md
+│  ├─ runbooks/feasibility-harness.md
+│  └─ specs/live-comment-tts-mvp.md
 ├─ tasks/
 │  ├─ capture-findings.md
 │  ├─ plan.md
@@ -216,79 +195,75 @@ Lưu ý: popup SSO bên thứ ba có thể bị chặn bởi thiết kế này. 
 ├─ src/
 │  ├─ main.ts
 │  ├─ platform.ts
+│  ├─ core/
+│  │  ├─ comment.ts
+│  │  ├─ dedup.ts
+│  │  ├─ filter.ts
+│  │  └─ queue.ts
 │  ├─ security/
+│  │  ├─ ipc.ts
 │  │  └─ platform-url.ts
-│  ├─ windows/
-│  │  └─ source-window.ts
+│  ├─ tts/
+│  │  ├─ playback-manager.ts
+│  │  └─ tts-service.ts
 │  ├─ ui/
 │  │  ├─ preload.ts
+│  │  ├─ recent-comment.ts
 │  │  └─ renderer.ts
+│  ├─ windows/source-window.ts
 │  └─ connectors/
+│     ├─ comment-tracker.ts
 │     ├─ facebook/preload.ts
 │     ├─ tiktok/preload.ts
 │     └─ shopee/preload.ts
 ├─ tests/
-│  ├─ platform-url.test.ts
-│  └─ source-window.test.ts
-├─ package.json
-└─ package-lock.json
+└─ package.json
 ```
 
-## Plan
-
-Implementation order:
+## Implementation order
 
 ```text
 repo/docs
   ↓
 Electron feasibility harness
   ↓
-Facebook capture spike
+Facebook + TikTok capture PASS
   ↓
-TikTok capture spike
-  ↓
-Shopee capture spike
-  ↓
-HARD GATE
+CURRENT GATE
   ↓
 core queue/filter/dedup
   ↓
-TTS
+TTS + secure sequential playback
   ↓
-Facebook multi-live + TikTok/Shopee integration
+Facebook multi-live + TikTok final integration
+
+Shopee capture (deferred)
   ↓
-minimal operator UI/config
+Shopee final integration
   ↓
-Windows verification/package
+full three-platform Windows verification/package
 ```
 
 Chi tiết xem `tasks/plan.md` và `tasks/todo.md`.
 
 ## Verification status
 
-**Verified by current GitHub Actions CI:**
+Runtime evidence hiện có trong repository:
 
-Trên cả `windows-latest` và `ubuntu-latest` với Node 24:
+- Facebook real live capture: PASS;
+- TikTok real live capture: PASS;
+- Shopee capture: DEFERRED / chưa test.
 
-- `npm ci` passes;
-- `npm run typecheck` passes;
-- `npm test` passes;
-- `npm run build` passes.
+GitHub Actions của các head đã verify `npm ci`, `npm run typecheck`, `npm test`, và `npm run build` trên Windows/Ubuntu. Mỗi thay đổi mới vẫn phải chờ CI của chính head đó trước khi coi repository checks là verified.
 
-**Also performed during the initial scaffold:**
+Các mục vẫn cần runtime verification ở phase tiếp theo:
 
-- transpile/syntax check source TypeScript with semantic checking disabled;
-- `node --check` on emitted JavaScript;
-- manual assertions for platform URL allowlist/lookalike-host rejection.
-
-**Not yet verified:**
-
-- Electron GUI runtime;
-- persistent authenticated session behavior on real platform pages;
-- authenticated Facebook/TikTok/Shopee live runtime;
-- real comment capture.
-
-Do not treat the capture gate or MVP as complete until the runtime checks above pass and platform evidence is recorded in `tasks/capture-findings.md`.
+- startup-baseline behavior trên real Facebook/TikTok live sau fix hiện tại;
+- sequential TTS playback trên fixed head;
+- Facebook 2 → 9 concurrent lives;
+- Shopee capture + end-to-end integration;
+- background/minimized source behavior;
+- final Windows packaging workflow.
 
 ## Out of scope MVP
 
@@ -306,4 +281,4 @@ Do not treat the capture gate or MVP as complete until the runtime checks above 
 
 ## Platform maintenance principle
 
-Platform-specific code phải nằm trong `src/connectors/<platform>/` càng nhiều càng tốt. Khi Facebook/TikTok/Shopee đổi DOM/network behavior, mục tiêu là sửa connector tương ứng thay vì sửa queue/TTS/core.
+Platform-specific capture code phải nằm trong `src/connectors/<platform>/` càng nhiều càng tốt. Khi Facebook/TikTok/Shopee đổi DOM/network behavior, mục tiêu là sửa connector tương ứng thay vì sửa queue/TTS/core.

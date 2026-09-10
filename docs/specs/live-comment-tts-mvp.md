@@ -2,6 +2,8 @@
 
 **Status:** Approved, implementation started
 
+**Scope amendment — 2026-09-10:** Facebook and TikTok capture are proven and may proceed through shared core/TTS implementation. Shopee capture/integration is deferred to the later platform-integration phase and does not block Facebook/TikTok core/TTS work. The full three-platform MVP is not complete until Shopee is proven and integrated.
+
 ## Goal
 
 Build a small Windows desktop app for internal use that reads livestream comments aloud in Vietnamese.
@@ -10,7 +12,7 @@ Supported platform modes:
 
 - Facebook Live
 - TikTok Live
-- Shopee Live
+- Shopee Live (deferred integration)
 
 Only one platform mode is active at a time.
 
@@ -33,6 +35,7 @@ Only one platform mode is active at a time.
 
 - One account/session.
 - One livestream at a time.
+- Capture and final integration are currently deferred; this does not block Facebook/TikTok core/TTS implementation.
 
 ## Spoken format
 
@@ -66,20 +69,20 @@ MVP does **not** use a backend server, database, Redis, message broker, microser
 
 ## Feasibility gate
 
-Before building the complete app, prove that each platform can expose at least one real new livestream comment to the Electron process.
+Before building the shared core/TTS path, prove that the currently active platforms can expose at least one real new livestream comment to the Electron process.
 
-For each platform the spike passes only when a real live page can provide:
+For a platform spike to pass, a real live page must provide:
 
 - username
 - comment text
 
-Required order:
+Current required order:
 
-1. Facebook spike
-2. TikTok spike
-3. Shopee spike
+1. Facebook spike — required before shared core/TTS
+2. TikTok spike — required before shared core/TTS
+3. Shopee spike — deferred; required before Shopee final integration and full three-platform MVP completion
 
-Only after all three have a viable capture route should the complete queue/TTS/UI implementation continue.
+After Facebook and TikTok have proven runtime capture routes, Tasks for the shared comment pipeline, TTS, and Facebook multi-live may proceed. Shopee being deferred does not block those tasks.
 
 Do **not** guess long-lived DOM selectors from memory. Inspect the current live page at runtime. If DOM observation is not viable for a platform, inspect the simplest next boundary (for example page network/WebSocket traffic) before choosing another connector strategy.
 
@@ -101,7 +104,7 @@ Remote windows must use at minimum:
 {
   nodeIntegration: false,
   contextIsolation: true,
-  sandbox: true
+  sandbox: true,
 }
 ```
 
@@ -110,7 +113,7 @@ Also:
 - mute livestream audio;
 - allow only platform hostnames for remote source windows;
 - block unexpected popups/new windows;
-- validate IPC payload shapes;
+- validate IPC payload shapes and senders at privileged boundaries;
 - never expose raw `ipcRenderer`, `fs`, `shell`, `require`, or Node APIs to the remote page.
 
 Do not disable background throttling unless runtime testing proves it is necessary.
@@ -151,6 +154,7 @@ Minimum behavior:
 - reject empty username/text;
 - cap TTS text at 250 characters;
 - deduplicate recent comments;
+- do not emit comments already present in the source DOM when the connector starts;
 - optionally skip URLs;
 - optionally skip blocked keywords.
 
@@ -174,6 +178,8 @@ Text format:
 `${comment.username}: ${comment.text}`
 ```
 
+The spoken-format string remains plain text. Before passing untrusted text into the TTS library's SSML envelope, XML-sensitive characters must be escaped.
+
 Audio playback must wait for the current audio to end/fail before taking the next item. Retry one TTS/playback failure once, then skip and continue.
 
 ## UI
@@ -185,10 +191,12 @@ Main UI needs only:
 - platform selector;
 - Facebook list of up to 9 live URLs with Open/Start/Stop/Remove;
 - one URL + Connect/Stop/Open for TikTok;
-- one URL + Connect/Stop/Open for Shopee;
+- one URL + Connect/Stop/Open for Shopee when Shopee integration resumes;
 - TTS enable/voice/rate/test/clear queue;
 - current speaking text + queue size;
 - recent in-memory comments with source label.
+
+Recent-comment rendering must consume structured comment fields rather than reparsing a human-readable status string.
 
 ## Persistence
 
@@ -205,7 +213,11 @@ Unit-test behavior that does not require a live platform:
 - stale comment skipping;
 - dedup;
 - filtering/normalization;
-- TTS formatting must be exactly `Tên khách: comment` without source/platform prefix.
+- connector startup baseline does not treat already-present DOM comments as new;
+- TTS formatting must be exactly `Tên khách: comment` without source/platform prefix;
+- SSML/XML escaping of untrusted spoken text;
+- IPC sender/payload validation for playback completion;
+- recent-comment display preserves usernames containing `:`.
 
 Connector runtime verification against real live pages remains mandatory because selectors/network behavior are platform-owned and can change independently of the repository.
 
@@ -227,14 +239,20 @@ Connector runtime verification against real live pages remains mandatory because
 
 ## Definition of done
 
-MVP is done only when:
+The current Facebook/TikTok implementation milestone is done only when:
 
-- all three platform capture routes are proven on real live pages;
+- Facebook and TikTok capture routes are proven on real live pages;
 - core tests pass;
-- Facebook works from 1 live through the agreed multi-live limit;
-- TikTok works for one live;
-- Shopee works for one live;
-- TTS is sequential and uses the exact spoken format;
+- implemented TTS is sequential and uses the exact spoken format;
 - stale/bounded queue behavior is verified;
-- Windows runtime is verified;
-- security boundaries for remote/untrusted pages and comment input are reviewed.
+- security boundaries for remote/untrusted pages, comment input, SSML output, and playback IPC are reviewed;
+- docs describe the current implementation and verification truth.
+
+The full three-platform MVP additionally requires:
+
+- Shopee capture proven on a real live page;
+- Facebook working from 1 live through the agreed multi-live limit;
+- TikTok working for one live;
+- Shopee working for one live;
+- Windows runtime verification for the completed operator workflow;
+- final packaging/distribution verification.
