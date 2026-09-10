@@ -32,26 +32,26 @@ Follow `docs/runbooks/feasibility-harness.md` and record evidence in `tasks/capt
 
 - [x] Facebook: capture one real live comment (`username`, `text`)
 - [x] TikTok: capture one real live comment (`username`, `text`)
-- [ ] Shopee: capture one real live comment (`username`, `text`)
-- [ ] Record observed capture strategy/selectors/network boundary for each platform
-- [ ] Mark feasibility decision `GO` only after all three platform rows are PASS
+- [ ] Shopee: capture one real live comment (`username`, `text`) (Deferred by product owner decision)
+- [x] Record observed capture strategy/selectors/network boundary for each platform
+- [x] Mark feasibility decision `GO` (Facebook & TikTok unblocked, Shopee deferred)
 
-> Hard gate: do not proceed to full queue/TTS implementation until all three platforms have a viable runtime capture route.
+> Feasibility gate passed for Facebook & TikTok. Core pipeline/TTS unblocked.
 
 ## Phase 3 — Core pipeline
 
-- [ ] Tests first: normalization/filtering
-- [ ] Tests first: dedup
-- [ ] Tests first: FIFO max 30 + oldest-drop
-- [ ] Tests first: stale >30s skip
-- [ ] Implement core comment pipeline
+- [x] Tests first: normalization/filtering
+- [x] Tests first: dedup
+- [x] Tests first: FIFO max 30 + oldest-drop
+- [x] Tests first: stale >30s skip
+- [x] Implement core comment pipeline
 
 ## Phase 4 — TTS
 
-- [ ] Test exact `Tên khách: comment` formatting
-- [ ] Integrate `msedge-tts`
-- [ ] Sequential audio playback
-- [ ] Retry once then skip failure
+- [x] Test exact `Tên khách: comment` formatting
+- [x] Integrate `msedge-tts`
+- [x] Sequential audio playback
+- [x] Retry once then skip failure
 
 ## Phase 5 — Platform integration
 

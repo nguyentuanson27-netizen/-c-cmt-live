@@ -16,5 +16,8 @@
     "electron": "44.2.0",
     "typescript": "7.0.2",
     "vitest": "5.0.0"
+  },
+  "dependencies": {
+    "msedge-tts": "^2.0.7"
   }
 }

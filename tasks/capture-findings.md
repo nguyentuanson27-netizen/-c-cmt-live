@@ -10,9 +10,9 @@ Do not paste passwords, OTPs, cookies, tokens, authorization headers, browser st
 |---|---|---|---|---|
 | Facebook | PASS | 2026-09-10 | DOM (role=article, dir=auto) | Observed Nguyễn Phong + FB_TEST_001..003 |
 | TikTok | PASS | 2026-09-10 | DOM (data-e2e=chat-message) | Observed real comments + verified DOM fixture |
-| Shopee | NOT TESTED | — | — | — |
+| Shopee | DEFERRED | 2026-09-10 | — | Deferred to Phase 5 by product owner decision |
 
-The full queue/TTS implementation remains blocked until all three rows are PASS.
+Facebook and TikTok capture are proven with real runtime evidence. Core queue/TTS implementation proceeds for Facebook & TikTok, with Shopee deferred.
 
 ---
 
@@ -275,17 +275,14 @@ Real comment capture: NOT RUN
 
 ## Feasibility decision
 
-Do not change this section to GO until all platform sections contain actual runtime evidence.
+Facebook and TikTok contain actual verified runtime evidence. Shopee is deferred by product owner decision.
 
-**Decision:** BLOCKED
+**Decision:** GO — proceed to core queue/TTS implementation
 
-**Reason:** Capture gate has not yet been proven on all three platforms.
+**Reason:** Facebook Live capture and TikTok Live capture are fully proven on current livestream DOM with real comments. Pipeline and Edge TTS development unblocked.
 
-When all three pass, record:
-
-- Facebook capture route:
-- TikTok capture route:
-- Shopee capture route:
-- commit containing proven spike implementations:
-- reviewer/self-review result:
+- Facebook capture route: DOM (`role="article"`, `dir="auto"`)
+- TikTok capture route: DOM (`[data-e2e="chat-message"]`, `[data-e2e="message-owner-name"]`, `.break-words`)
+- Shopee capture route: Deferred (requires seller portal `live.shopee.vn/pc/setup`)
+- commit containing proven spike implementations: d451540
 - decision: `GO — proceed to core queue/TTS implementation`

@@ -3,11 +3,75 @@ import { app, BrowserWindow, ipcMain, type IpcMainEvent, type IpcMainInvokeEvent
 import { isPlatform, type Platform } from "./platform";
 import { isAllowedPlatformUrl } from "./security/platform-url";
 import { createSourceWindow, type SourceWindow } from "./windows/source-window";
+import type { Comment } from "./core/comment";
+import { normalizeComment } from "./core/filter";
+import { CommentDedup } from "./core/dedup";
+import { CommentQueue } from "./core/queue";
+import { TTSService } from "./tts/tts-service";
+import { PlaybackManager } from "./tts/playback-manager";
 
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
 let activeSource: SourceWindow | null = null;
+
+const commentDedup = new CommentDedup({ windowMs: 60_000 });
+const commentQueue = new CommentQueue(30, 30_000);
+const ttsService = new TTSService();
+
+let isTtsPaused = false;
+let currentSpeakingText = "";
+
+function emitTtsStatus(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("tts:status", {
+      queueSize: commentQueue.size(),
+      currentSpeaking: currentSpeakingText || undefined,
+      isPaused: isTtsPaused,
+    });
+  }
+}
+
+const playbackManager = new PlaybackManager(commentQueue, ttsService, {
+  onSpeakStart: (_comment, text) => {
+    currentSpeakingText = text;
+    emitTtsStatus();
+  },
+  onSpeakEnd: () => {
+    currentSpeakingText = "";
+    emitTtsStatus();
+  },
+  onQueueUpdate: () => {
+    emitTtsStatus();
+  },
+  playAudio: async (id, audioBase64) => {
+    const targetWin = mainWindow;
+    if (!targetWin || targetWin.isDestroyed()) {
+      return { success: false };
+    }
+    return new Promise((resolve) => {
+      const handler = (_event: IpcMainEvent, payload: { id: string; success: boolean }) => {
+        if (payload?.id === id) {
+          ipcMain.removeListener("tts:playback-finished", handler);
+          clearTimeout(timeoutId);
+          resolve({ success: payload.success });
+        }
+      };
+
+      const timeoutId = setTimeout(() => {
+        ipcMain.removeListener("tts:playback-finished", handler);
+        resolve({ success: false });
+      }, 25_000);
+
+      ipcMain.on("tts:playback-finished", handler);
+      targetWin.webContents.send("tts:play", {
+        id,
+        audioBase64,
+        text: currentSpeakingText,
+      });
+    });
+  },
+});
 
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -107,6 +171,25 @@ ipcMain.handle("source:devtools", async (event) => {
   return { ok: true };
 });
 
+ipcMain.handle("tts:toggle", async (event) => {
+  if (!isTrustedMainSender(event)) {
+    return { ok: false, isPaused: isTtsPaused };
+  }
+  isTtsPaused = !isTtsPaused;
+  playbackManager.setPaused(isTtsPaused);
+  emitTtsStatus();
+  return { ok: true, isPaused: isTtsPaused };
+});
+
+ipcMain.handle("tts:clear-queue", async (event) => {
+  if (!isTrustedMainSender(event)) {
+    return { ok: false };
+  }
+  commentQueue.clear();
+  emitTtsStatus();
+  return { ok: true };
+});
+
 ipcMain.on("source:ready", (event: IpcMainEvent, payload: unknown) => {
   if (!activeSource || activeSource.window.isDestroyed()) {
     return;
@@ -149,30 +232,60 @@ ipcMain.on("source:comment", (event: IpcMainEvent, payload: unknown) => {
   if (
     comment.platform !== activeSource.platform ||
     typeof comment.username !== "string" ||
-    typeof comment.text !== "string" ||
-    !comment.username.trim() ||
-    !comment.text.trim()
+    typeof comment.text !== "string"
   ) {
     return;
   }
 
-  const username = comment.username.trim();
-  const text = comment.text.trim();
   const currentUrl = activeSource.window.webContents.getURL();
-
   if (!isAllowedPlatformUrl(currentUrl, activeSource.platform)) {
     return;
   }
 
-  console.log(`[REAL COMMENT CAPTURED] [${activeSource.platform}] ${username}: ${text}`);
-  emitStatus(`[${activeSource.platform}] ${username}: ${text}`);
+  // 1. Filter & Normalize
+  const normalized = normalizeComment(comment.username, comment.text);
+  if (!normalized) {
+    return;
+  }
+
+  // 2. Deduplicate
+  if (commentDedup.isDuplicate(normalized.username, normalized.text)) {
+    return;
+  }
+  commentDedup.record(normalized.username, normalized.text);
+
+  // 3. Enqueue
+  const item: Comment = {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    platform: activeSource.platform,
+    sourceId: activeSource.window.id.toString(),
+    sourceLabel: activeSource.platform,
+    username: normalized.username,
+    text: normalized.text,
+    receivedAt: Date.now(),
+  };
+
+  commentQueue.enqueue(item);
+  emitTtsStatus();
+
+  console.log(`[REAL COMMENT CAPTURED] [${activeSource.platform}] ${normalized.username}: ${normalized.text}`);
+  emitStatus(`[${activeSource.platform}] ${normalized.username}: ${normalized.text}`);
+
+  // 4. Trigger playback
+  void playbackManager.processNext();
 });
 
 app.whenReady().then(() => {
   mainWindow = createMainWindow();
 
+  mainWindow.webContents.on("did-finish-load", () => {
+    emitTtsStatus();
+  });
+
   mainWindow.on("closed", () => {
     closeActiveSource();
+    playbackManager.setPaused(true);
+    commentQueue.clear();
     mainWindow = null;
   });
 
