@@ -21,14 +21,16 @@ Repository đã qua feasibility cho **Facebook + TikTok** và đang ở giai đo
 - platform URL allowlist và popup/navigation restrictions;
 - Facebook real-comment parser/capture đã có runtime evidence;
 - TikTok real-comment parser/capture đã có runtime evidence;
-- startup baseline để comment đã có sẵn trong DOM không bị coi là comment mới;
+- startup baseline theo DOM element identity để comment đã có sẵn không bị coi là comment mới;
 - core normalize/filter/dedup/bounded FIFO queue + stale skip;
+- collision-safe core dedup key với sliding window;
 - `msedge-tts` với voice mặc định `vi-VN-HoaiMyNeural`;
 - sequential playback, retry một lần rồi skip khi lỗi;
-- XML/SSML escaping cho comment text trước khi gửi vào TTS library;
+- XML/SSML escaping cho untrusted comment text trước khi gửi vào TTS library;
 - playback-completion IPC kiểm tra sender, playback id và payload shape;
 - TTS status, pause/resume, clear queue và recent comment view;
 - recent comment UI nhận structured payload, không parse lại status string;
+- build-time runtime-module guard để renderer và sandboxed preloads không phát sinh unsupported `require(...)` sau `tsc`;
 - `package-lock.json`;
 - GitHub Actions CI chạy `npm ci` + typecheck + tests + build trên Windows và Ubuntu với Node 24.
 
@@ -131,13 +133,13 @@ npm run build
 npm run dev
 ```
 
-`npm run dev` build TypeScript rồi mở Electron app.
+`npm run build` compile TypeScript rồi chạy `scripts/check-runtime-modules.cjs` trên emitted renderer/preload JavaScript. `npm run dev` build rồi mở Electron app.
 
 ## Capture behavior
 
 Facebook và TikTok connector dùng DOM boundary đã được ghi lại trong `tasks/capture-findings.md`.
 
-Khi connector khởi động, các comment đang tồn tại trong DOM được đưa vào baseline dedup state nhưng **không emit** vào pipeline. Chỉ comment mới xuất hiện sau baseline mới được gửi về Electron main process.
+Khi connector khởi động, các comment element đang tồn tại trong DOM được đánh dấu là baseline nhưng **không emit** vào pipeline. Connector chỉ dùng DOM element identity để tránh xử lý lại cùng node; content dedup thuộc về core `CommentDedup` với sliding window, nên một comment giống hệt xuất hiện lại ở một element mới không bị connector chặn vĩnh viễn.
 
 Platform-specific selectors/network behavior vẫn phải được runtime-verify khi platform thay đổi; unit test không thay thế real-live verification.
 
@@ -168,7 +170,8 @@ Ngoài ra source window:
 - deny permission requests theo policy hiện tại;
 - deny unexpected popup/new-window;
 - chặn navigation/redirect sang hostname ngoài platform;
-- remote preload chỉ gửi payload tối thiểu qua IPC.
+- remote preload chỉ gửi payload tối thiểu qua IPC;
+- sandboxed preload chỉ runtime-require `electron`; local helper imports phải được bundle trước khi dùng, và build guard hiện reject chúng.
 
 Main process validate sender/platform/URL/payload trước khi nhận comment. Playback completion từ renderer cũng validate sender, expected playback id và boolean `success` trước khi advance queue.
 
@@ -185,11 +188,14 @@ Comment text là untrusted input. Spoken string vẫn có format `username: text
 │  ├─ adr/0001-electron-local-browser-capture.md
 │  ├─ runbooks/feasibility-harness.md
 │  └─ specs/live-comment-tts-mvp.md
+├─ scripts/
+│  └─ check-runtime-modules.cjs
 ├─ tasks/
 │  ├─ capture-findings.md
 │  ├─ plan.md
 │  └─ todo.md
 ├─ public/
+│  ├─ bootstrap.js
 │  ├─ index.html
 │  └─ app.css
 ├─ src/
@@ -208,11 +214,9 @@ Comment text là untrusted input. Spoken string vẫn có format `username: text
 │  │  └─ tts-service.ts
 │  ├─ ui/
 │  │  ├─ preload.ts
-│  │  ├─ recent-comment.ts
 │  │  └─ renderer.ts
 │  ├─ windows/source-window.ts
 │  └─ connectors/
-│     ├─ comment-tracker.ts
 │     ├─ facebook/preload.ts
 │     ├─ tiktok/preload.ts
 │     └─ shopee/preload.ts
@@ -254,7 +258,7 @@ Runtime evidence hiện có trong repository:
 - TikTok real live capture: PASS;
 - Shopee capture: DEFERRED / chưa test.
 
-GitHub Actions của các head đã verify `npm ci`, `npm run typecheck`, `npm test`, và `npm run build` trên Windows/Ubuntu. Mỗi thay đổi mới vẫn phải chờ CI của chính head đó trước khi coi repository checks là verified.
+GitHub Actions CI verify `npm ci`, `npm run typecheck`, `npm test`, và `npm run build` trên Windows/Ubuntu. Build hiện bao gồm runtime-module boundary check trên emitted JavaScript. Mỗi thay đổi mới vẫn phải chờ CI của chính head đó trước khi coi repository checks là verified.
 
 Các mục vẫn cần runtime verification ở phase tiếp theo:
 
