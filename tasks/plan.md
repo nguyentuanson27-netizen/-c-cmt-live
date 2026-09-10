@@ -70,8 +70,9 @@ Tasks 2–4 may be investigated independently once Task 1 is runnable, but the p
 - [x] Operator UI can open/close a source and open DevTools.
 
 **Verification:**
-- [ ] `npm install` succeeds and reviewed `package-lock.json` is committed.
-- [ ] `npm run typecheck`, `npm test`, `npm run build` pass with repository dependencies installed.
+- [x] `package-lock.json` exists and current CI completes `npm ci` on Windows and Ubuntu (Node 22).
+- [x] Current CI completes `npm test` successfully on Windows and Ubuntu.
+- [ ] `npm run typecheck` and `npm run build` pass in the current repository environment/CI.
 - [ ] Windows GUI runtime confirms source open/login/session reuse behavior.
 
 **Dependencies:** Task 0
