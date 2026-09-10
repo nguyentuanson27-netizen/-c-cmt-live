@@ -23,7 +23,9 @@ Repository đang ở **feasibility phase**.
 - platform URL allowlist;
 - unexpected popup/new-window bị chặn;
 - nút mở DevTools để inspect live page hiện tại;
-- test cho URL allowlist;
+- URL allowlist/source-window tests;
+- `package-lock.json`;
+- GitHub Actions CI chạy `npm ci` + `npm test` trên Windows và Ubuntu;
 - spec, plan, agent rules, architecture decision, feasibility runbook và capture-evidence template.
 
 **Chưa có:** parser comment thật, queue TTS hoàn chỉnh, Facebook multi-live, Windows installer.
@@ -117,7 +119,7 @@ MVP không dùng:
 
 ## Quick start
 
-Khuyến nghị Node.js 24.x cho môi trường development.
+CI hiện dùng Node.js 22. Dependency tree hiện yêu cầu Node `>=22.12.0`; dùng Node 22 LTS hoặc mới hơn cho development.
 
 Clone và checkout branch đang triển khai:
 
@@ -127,19 +129,17 @@ cd ./-c-cmt-live
 git checkout feat/mvp-live-comment-tts
 ```
 
-Cài dependency và kiểm tra:
+Cài dependency từ lockfile và kiểm tra:
 
 ```bash
-npm install
-npm run typecheck
+npm ci
 npm test
+npm run typecheck
 npm run build
 npm run dev
 ```
 
 `npm run dev` build TypeScript rồi mở Electron app.
-
-> Repository hiện chưa có `package-lock.json` vì dependency install chưa được chạy trong môi trường có npm registry access. Sau lần `npm install` đầu tiên, lockfile cần được review và commit trước khi coi dependency set là ship-ready.
 
 ## Cách dùng feasibility harness
 
@@ -195,6 +195,8 @@ Lưu ý: popup SSO bên thứ ba có thể bị chặn bởi thiết kế này. 
 
 ```text
 .
+├─ .github/
+│  └─ workflows/ci.yml
 ├─ AGENTS.md
 ├─ README.md
 ├─ docs/
@@ -225,8 +227,11 @@ Lưu ý: popup SSO bên thứ ba có thể bị chặn bởi thiết kế này. 
 │     ├─ facebook/preload.ts
 │     ├─ tiktok/preload.ts
 │     └─ shopee/preload.ts
-└─ tests/
-   └─ platform-url.test.ts
+├─ tests/
+│  ├─ platform-url.test.ts
+│  └─ source-window.test.ts
+├─ package.json
+└─ package-lock.json
 ```
 
 ## Plan
@@ -261,22 +266,29 @@ Chi tiết xem `tasks/plan.md` và `tasks/todo.md`.
 
 ## Verification status
 
-Đã thực hiện trong quá trình scaffold:
+**Verified by current GitHub Actions CI:**
 
-- transpile/syntax check source TypeScript bằng compiler có sẵn trong execution environment với semantic checking disabled;
-- `node --check` trên JavaScript đã emit;
-- manual assertions cho platform URL allowlist/lookalike-host rejection.
+- `npm ci` passes on `windows-latest` with Node 22;
+- `npm test` passes on `windows-latest` with Node 22;
+- `npm ci` passes on `ubuntu-latest` with Node 22;
+- `npm test` passes on `ubuntu-latest` with Node 22.
 
-Chưa thực hiện được trong execution environment của lần scaffold:
+**Also performed during the initial scaffold:**
 
-- `npm install`;
-- repository `npm test`;
-- repository `npm run typecheck` với Electron/Vitest dependencies thực tế;
+- transpile/syntax check source TypeScript with semantic checking disabled;
+- `node --check` on emitted JavaScript;
+- manual assertions for platform URL allowlist/lookalike-host rejection.
+
+**Not yet verified:**
+
+- `npm run typecheck` in CI/current GUI environment;
+- `npm run build` in CI/current GUI environment;
 - Electron GUI runtime;
+- persistent authenticated session behavior on real platform pages;
 - authenticated Facebook/TikTok/Shopee live runtime;
 - real comment capture.
 
-Không coi capture gate hoặc MVP là hoàn thành cho tới khi các runtime check tương ứng pass và được ghi lại trong `tasks/capture-findings.md`.
+Do not treat the capture gate or MVP as complete until the runtime checks above pass and platform evidence is recorded in `tasks/capture-findings.md`.
 
 ## Out of scope MVP
 
