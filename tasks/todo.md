@@ -20,10 +20,12 @@
 - [x] Add secure/muted source BrowserWindow helper
 - [x] Add persistent platform partitions
 - [x] Add minimal local operator UI for opening a source URL
-- [x] Add URL allowlist tests
-- [ ] Run `npm install` and commit reviewed `package-lock.json`
-- [ ] Run repository `npm test`
+- [x] Add URL allowlist/source-window tests
+- [x] Commit `package-lock.json`
+- [x] Add CI with repeatable `npm ci` + `npm test`
+- [x] CI `npm ci` + `npm test` pass on Windows and Ubuntu (Node 22)
 - [ ] Run repository `npm run typecheck`
+- [ ] Run repository `npm run build`
 - [ ] Run Electron GUI and confirm source/session behavior
 
 ## Phase 2 — Capture gate
