@@ -22,10 +22,8 @@
 - [x] Add minimal local operator UI for opening a source URL
 - [x] Add URL allowlist/source-window tests
 - [x] Commit `package-lock.json`
-- [x] Add CI with repeatable `npm ci` + `npm test`
-- [x] CI `npm ci` + `npm test` pass on Windows and Ubuntu (Node 22)
-- [ ] Run repository `npm run typecheck`
-- [ ] Run repository `npm run build`
+- [x] Add CI with repeatable `npm ci` + typecheck + tests + build
+- [x] CI passes `npm ci`, `npm run typecheck`, `npm test`, and `npm run build` on Windows and Ubuntu (Node 24)
 - [ ] Run Electron GUI and confirm source/session behavior
 
 ## Phase 2 — Capture gate
@@ -72,7 +70,7 @@ Follow `docs/runbooks/feasibility-harness.md` and record evidence in `tasks/capt
 
 ## Phase 7 — Verify/ship
 
-- [ ] Full tests
+- [ ] Full tests for implemented MVP behavior
 - [ ] Typecheck
 - [ ] Build
 - [ ] Facebook runtime 1 → 2 → up to 9 lives
