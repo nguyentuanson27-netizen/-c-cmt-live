@@ -56,7 +56,7 @@ The MVP supports one Shopee live at a time.
 
 ```bash
 git clone https://github.com/nguyentuanson27-netizen/-c-cmt-live.git
-cd=-c-cmt-live
+cd ./-c-cmt-live
 git checkout feat/mvp-live-comment-tts
 git status
 git branch --show-current
