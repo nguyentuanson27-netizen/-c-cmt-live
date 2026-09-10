@@ -24,13 +24,13 @@
 - [x] Commit `package-lock.json`
 - [x] Add CI with repeatable `npm ci` + typecheck + tests + build
 - [x] CI passes `npm ci`, `npm run typecheck`, `npm test`, and `npm run build` on Windows and Ubuntu (Node 24)
-- [ ] Run Electron GUI and confirm source/session behavior
+- [x] Run Electron GUI and confirm source/session behavior
 
 ## Phase 2 — Capture gate
 
 Follow `docs/runbooks/feasibility-harness.md` and record evidence in `tasks/capture-findings.md`.
 
-- [ ] Facebook: capture one real live comment (`username`, `text`)
+- [x] Facebook: capture one real live comment (`username`, `text`)
 - [ ] TikTok: capture one real live comment (`username`, `text`)
 - [ ] Shopee: capture one real live comment (`username`, `text`)
 - [ ] Record observed capture strategy/selectors/network boundary for each platform
