@@ -132,6 +132,42 @@ ipcMain.on("source:ready", (event: IpcMainEvent, payload: unknown) => {
   emitStatus(`${activeSource.platform} source đã load. Mở DevTools để inspect comment DOM.`);
 });
 
+ipcMain.on("source:comment", (event: IpcMainEvent, payload: unknown) => {
+  if (!activeSource || activeSource.window.isDestroyed()) {
+    return;
+  }
+
+  if (event.sender.id !== activeSource.window.webContents.id) {
+    return;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return;
+  }
+
+  const comment = payload as Record<string, unknown>;
+  if (
+    comment.platform !== activeSource.platform ||
+    typeof comment.username !== "string" ||
+    typeof comment.text !== "string" ||
+    !comment.username.trim() ||
+    !comment.text.trim()
+  ) {
+    return;
+  }
+
+  const username = comment.username.trim();
+  const text = comment.text.trim();
+  const currentUrl = activeSource.window.webContents.getURL();
+
+  if (!isAllowedPlatformUrl(currentUrl, activeSource.platform)) {
+    return;
+  }
+
+  console.log(`[REAL COMMENT CAPTURED] [${activeSource.platform}] ${username}: ${text}`);
+  emitStatus(`[${activeSource.platform}] ${username}: ${text}`);
+});
+
 app.whenReady().then(() => {
   mainWindow = createMainWindow();
 
