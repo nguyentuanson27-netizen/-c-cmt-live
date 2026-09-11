@@ -13,6 +13,7 @@
 - [x] Test multi-page burst catch-up.
 - [x] Test stop/restart stale-request isolation.
 - [x] RED regression test for code-190 token expiry, followed by GREEN fix.
+- [x] Failed replacement start keeps the current live active until the replacement baseline succeeds.
 - [x] Implement connector and make focused tests GREEN.
 
 ## Task 2 — Web server/SSE
@@ -20,21 +21,23 @@
 - [x] Read `FACEBOOK_PAGE_ACCESS_TOKEN` and `FACEBOOK_GRAPH_API_VERSION` server-side only.
 - [x] Add start/stop/status endpoints with bounded JSON parsing.
 - [x] Add SSE event stream and security headers.
+- [x] Deliver each playback event to one browser client only; transfer ownership after that SSE client disconnects.
+- [x] Accept IPv4/hostname/IPv6 loopback forms, including bracketed IPv6 origins.
 - [x] Add focused server-boundary tests.
 
 ## Task 3 — Core/TTS
-- [x] Reset single-live dedup state on source start and retain Live Video ID in source identity.
+- [x] Reset single-live dedup state only after a replacement live starts successfully and retain Live Video ID in source identity.
 - [x] Route Graph comments through normalize → dedup → bounded FIFO queue.
 - [x] Synthesize Edge TTS on server using existing exact `username: comment` formatting.
 - [x] Send one audio item at a time to browser and await matching playback completion.
 - [x] Keep pause/resume/clear queue controls.
 
 ## Automated verification
-- [x] Full `npm run typecheck` PASS on code head `71bd2f49431fae14ef609d03117b6b2016dfb52a`.
-- [x] Full `npm test` PASS: 60/60 on code head `71bd2f49431fae14ef609d03117b6b2016dfb52a`.
-- [x] Full `npm run build` + runtime-module guard PASS on code head `71bd2f49431fae14ef609d03117b6b2016dfb52a`.
-- [x] CI PASS on Ubuntu + Windows for code head `71bd2f49431fae14ef609d03117b6b2016dfb52a`.
-- [x] Security/code self-review: no token in browser storage, Graph URL, logs or SSE payloads; browser cannot submit a token; local runtime refuses non-loopback binding.
+- [x] Full `npm run typecheck` PASS on code head `b6e65f9465f92220a1882bbb2e3a90e3a1395166`.
+- [x] Full `npm test` PASS: 62/62 on code head `b6e65f9465f92220a1882bbb2e3a90e3a1395166`.
+- [x] Full `npm run build` + runtime-module guard PASS on code head `b6e65f9465f92220a1882bbb2e3a90e3a1395166`.
+- [x] CI PASS on Ubuntu + Windows for code head `b6e65f9465f92220a1882bbb2e3a90e3a1395166`.
+- [x] Security/code self-review: no token in browser storage, Graph URL, logs or SSE payloads; browser cannot submit a token; local runtime refuses non-loopback binding; failed replacement starts preserve the current live/queue; playback is single-browser-owned.
 
 ## Runtime verification — merge gate
 - [ ] Verify the actual Meta Graph API version and Page token permissions for the target Page/app.
