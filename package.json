@@ -1,15 +1,15 @@
 {
   "name": "live-comment-tts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Internal Windows Electron app for reading Facebook, TikTok and Shopee live comments with Vietnamese TTS.",
-  "main": "dist/main.js",
+  "description": "Local web app for reading managed Facebook Live comments through Graph API with Vietnamese TTS.",
+  "main": "dist/server/main.js",
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.json && npm run check:runtime-modules",
     "check:runtime-modules": "node scripts/check-runtime-modules.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "npm run build && electron .",
+    "dev": "npm run build && node dist/server/main.js",
     "test": "vitest run"
   },
   "devDependencies": {
