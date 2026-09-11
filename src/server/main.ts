@@ -43,7 +43,9 @@ const graphPoller = new FacebookGraphCommentPoller();
 const commentQueue = new CommentQueue(30, 30_000);
 const commentDedup = new CommentDedup({ windowMs: 60_000, maxEntries: 2000 });
 const ttsService = new TTSService();
-const playbackBridge = new BrowserPlaybackBridge((event) => hub.broadcast(event));
+const playbackBridge = new BrowserPlaybackBridge((event) => {
+  hub.broadcastOne(event);
+});
 let ttsPaused = false;
 
 function broadcastStatus(message: string, level: "info" | "error" = "info"): void {
@@ -293,10 +295,6 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      commentQueue.clear();
-      commentDedup.clear();
-      broadcastQueueState();
-
       const result = await graphPoller.start(
         {
           ...serverConfig.config,
@@ -310,6 +308,13 @@ const server = createServer(async (request, response) => {
           onStatus: broadcastStatus,
         },
       );
+
+      if (result.ok) {
+        commentQueue.clear();
+        commentDedup.clear();
+        broadcastQueueState();
+      }
+
       sendJson(response, result.ok ? 200 : 502, result);
       return;
     }
