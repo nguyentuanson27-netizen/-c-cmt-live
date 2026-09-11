@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  FACEBOOK_COMMENT_OBSERVER_OPTIONS,
   createFacebookProcessedArticleState,
   takeNewFacebookComment,
 } from "../src/connectors/facebook/preload";
 import {
+  TIKTOK_COMMENT_OBSERVER_OPTIONS,
   createTikTokProcessedElementState,
   takeNewTikTokComment,
 } from "../src/connectors/tiktok/preload";
@@ -89,6 +91,14 @@ describe("sandboxed preload element tracking", () => {
     expect(takeNewFacebookComment(processed, article.element)).toBeNull();
   });
 
+  it("observes Facebook aria-label changes used by the parser", () => {
+    expect(FACEBOOK_COMMENT_OBSERVER_OPTIONS).toMatchObject({
+      attributes: true,
+      attributeFilter: ["aria-label"],
+      subtree: true,
+    });
+  });
+
   it("allows a reused TikTok element to emit when its comment content changes", () => {
     const message = mutableTikTokMessage("Bob", "first comment");
     const processed = createTikTokProcessedElementState([message.element]);
@@ -101,5 +111,13 @@ describe("sandboxed preload element tracking", () => {
       text: "second comment",
     });
     expect(takeNewTikTokComment(processed, message.element)).toBeNull();
+  });
+
+  it("observes TikTok title changes used by the parser", () => {
+    expect(TIKTOK_COMMENT_OBSERVER_OPTIONS).toMatchObject({
+      attributes: true,
+      attributeFilter: ["title"],
+      subtree: true,
+    });
   });
 });
