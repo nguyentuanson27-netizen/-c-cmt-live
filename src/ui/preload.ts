@@ -25,10 +25,22 @@ export type AcceptedCommentPayload = {
   text: string;
 };
 
+export type SourceItem = {
+  id: string;
+  platform: Platform;
+  label: string;
+  url: string;
+};
+
 contextBridge.exposeInMainWorld("liveCommentTts", {
   openSource: (platform: Platform, url: string) => ipcRenderer.invoke("source:open", { platform, url }),
-  closeSource: () => ipcRenderer.invoke("source:close"),
-  openDevTools: () => ipcRenderer.invoke("source:devtools"),
+  closeSource: (sourceId?: string) => ipcRenderer.invoke("source:close", { sourceId }),
+  openDevTools: (sourceId?: string) => ipcRenderer.invoke("source:devtools", { sourceId }),
+  onSourceList: (callback: (sources: SourceItem[]) => void) => {
+    const listener = (_event: unknown, sources: SourceItem[]) => callback(sources);
+    ipcRenderer.on("source:list", listener);
+    return () => ipcRenderer.removeListener("source:list", listener);
+  },
   onSourceStatus: (callback: (status: SourceStatus) => void) => {
     const listener = (_event: unknown, status: SourceStatus) => callback(status);
     ipcRenderer.on("source:status", listener);

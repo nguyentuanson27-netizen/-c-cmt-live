@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { extractFacebookComment } from "../src/connectors/facebook/preload";
 
 describe("facebook comment parser", () => {
@@ -101,5 +101,103 @@ describe("facebook comment parser", () => {
     } as unknown as Element;
 
     expect(extractFacebookComment(article)).toBeNull();
+  });
+
+  it("rejects Facebook Live viewer join notification like 'Phùng Kim Anh vào'", () => {
+    const article = {
+      getAttribute() {
+        return null;
+      },
+      querySelector(selector: string) {
+        if (selector === 'a[role="link"]') {
+          return { textContent: "Phùng Kim Anh vào" };
+        }
+        return null;
+      },
+      querySelectorAll(selector: string) {
+        if (selector.includes('dir="auto"')) {
+          return [{ textContent: "Phùng Kim Anh" }];
+        }
+        return [];
+      },
+      textContent: "Phùng Kim Anh vào",
+    } as unknown as Element;
+
+    expect(extractFacebookComment(article)).toBeNull();
+  });
+
+  it("rejects join notification when text echoes username", () => {
+    const article = {
+      getAttribute() {
+        return null;
+      },
+      querySelector(selector: string) {
+        if (selector === 'a[role="link"]') {
+          return { textContent: "Linh Xe Ôm" };
+        }
+        return null;
+      },
+      querySelectorAll(selector: string) {
+        if (selector.includes('dir="auto"')) {
+          return [{ textContent: "Linh Xe Ôm" }];
+        }
+        return [];
+      },
+      textContent: "Linh Xe Ôm vào xem",
+    } as unknown as Element;
+
+    expect(extractFacebookComment(article)).toBeNull();
+  });
+
+  it("rejects notification when text is a join keyword", () => {
+    const article = {
+      getAttribute() {
+        return null;
+      },
+      querySelector(selector: string) {
+        if (selector === 'a[role="link"]') {
+          return { textContent: "Nguyễn Long" };
+        }
+        return null;
+      },
+      querySelectorAll(selector: string) {
+        if (selector.includes('dir="auto"')) {
+          return [{ textContent: "vào xem" }];
+        }
+        return [];
+      },
+      textContent: "Nguyễn Long vào xem",
+    } as unknown as Element;
+
+    expect(extractFacebookComment(article)).toBeNull();
+  });
+
+  it("skips timestamp '1 phút' and captures actual comment text", () => {
+    const article = {
+      getAttribute() {
+        return null;
+      },
+      querySelector(selector: string) {
+        if (selector === 'a[role="link"]') {
+          return { textContent: "Vũ Quyên" };
+        }
+        return null;
+      },
+      querySelectorAll(selector: string) {
+        if (selector.includes('dir="auto"')) {
+          return [
+            { textContent: "Vũ Quyên" },
+            { textContent: "1 phút" },
+            { textContent: "áo này còn size M không shop?" },
+          ];
+        }
+        return [];
+      },
+    } as unknown as Element;
+
+    expect(extractFacebookComment(article)).toEqual({
+      username: "Vũ Quyên",
+      text: "áo này còn size M không shop?",
+    });
   });
 });
