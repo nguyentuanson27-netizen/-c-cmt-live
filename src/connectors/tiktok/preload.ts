@@ -2,6 +2,14 @@ import { ipcRenderer } from "electron";
 
 const platform = "tiktok" as const;
 
+export const TIKTOK_COMMENT_OBSERVER_OPTIONS: MutationObserverInit = {
+  childList: true,
+  characterData: true,
+  attributes: true,
+  attributeFilter: ["title"],
+  subtree: true,
+};
+
 export type TikTokCommentPayload = {
   username: string;
   text: string;
@@ -182,10 +190,10 @@ function setupCommentObserver(): void {
 
   const target = document.body || document.documentElement;
   if (target) {
-    observer.observe(target, { childList: true, characterData: true, subtree: true });
+    observer.observe(target, TIKTOK_COMMENT_OBSERVER_OPTIONS);
   } else {
     window.addEventListener("DOMContentLoaded", () => {
-      observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+      observer.observe(document.body, TIKTOK_COMMENT_OBSERVER_OPTIONS);
     });
   }
 }
