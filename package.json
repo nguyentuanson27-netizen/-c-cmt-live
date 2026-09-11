@@ -1,6 +1,6 @@
 {
   "name": "live-comment-tts",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Local web app for reading managed Facebook Live comments through Graph API with Vietnamese TTS.",
   "main": "dist/server/main.js",
