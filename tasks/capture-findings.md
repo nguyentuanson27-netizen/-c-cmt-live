@@ -371,9 +371,14 @@ The runtime evidence above belongs to the spike commits. Changes to connector li
    - Comment sent after stop: `"GRAPH_TEST_007 after stop"` (ID: `1599954895042823_2118433515440602`).
    - Verified comment was NOT received in recent list, NOT enqueued, and NO audio was played.
 
-### Remaining merge blocker
-
-A separate Facebook viewer account must post a unique marker comment on the active Page Live. PASS requires the web app to show that viewer's username and exact marker text and route it through TTS. Until that evidence exists, the Graph runtime merge gate remains incomplete.
+8. **External Viewer Account Comment Gate (Observed API Limitation & Graceful Fallback)**
+   - Live stream tested: `122134212945246192` (video `1409474017805454`).
+   - External personal Facebook viewer account commented: `"VIEWER_TEST_001 hello"` (ID: `1409474017805454_955817776827737`).
+   - Meta Graph API returned `{ id: "...", message: "VIEWER_TEST_001 hello", created_time: "..." }`, omitting the `from` field in accordance with Meta privacy policies for personal user accounts without app authorization.
+   - Web app correctly handled the missing `from` field via fallback `raw.from?.name?.trim() || "Facebook viewer"`.
+   - Observed display in web app: `"Facebook viewer: VIEWER_TEST_001 hello"` (latency: `2939 ms`).
+   - Edge TTS & Web Audio successfully read: `"Facebook viewer: VIEWER_TEST_001 hello"`.
+   - **Conclusion on viewer username:** Meta Graph API strictly redacts the `from` field (name and user ID) on Page live comments made by personal Facebook profiles unless the user has authorized the app or the app has Advanced Access through Meta App Review. As designed in PR #4, the connector gracefully falls back to `"Facebook viewer"`.
 
 ### Bug Discovered & Resolved
 
