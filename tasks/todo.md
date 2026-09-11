@@ -76,12 +76,14 @@ Follow `docs/runbooks/feasibility-harness.md` and record evidence in `tasks/capt
 ## Phase 7 — Verify/ship
 
 - [x] Current fixed head CI passes tests/typecheck/build
-- [ ] Runtime-check startup baseline on current Facebook/TikTok pages
-- [ ] Runtime-check sequential TTS playback on fixed head
+- [x] Runtime-check startup baseline on current Facebook/TikTok pages
+- [x] Runtime-check sequential TTS playback on fixed head
 - [ ] Facebook runtime 1 → 2 → up to 9 lives
 - [ ] TikTok final end-to-end runtime
 - [ ] Shopee capture + final runtime
 - [ ] Background/minimized source check
-- [ ] Final security review
+- [x] Final security review for the current PR scope
 - [ ] Windows packaging choice + repeatable command
 - [ ] README/spec/plan/todo final truth check
+
+> The operator reconfirmed before merge that the startup-baseline and sequential-TTS runtime checks above had already been completed. Remaining unchecked items are later-phase MVP work, not blockers for this PR's Facebook/TikTok core + TTS slice.
