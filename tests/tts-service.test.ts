@@ -23,4 +23,36 @@ describe("TTS service transport boundary", () => {
     );
     expect(audio.toString()).toBe("audio");
   });
+
+  it("recreates the client after initialization fails so a retry can recover", async () => {
+    const failedSetMetadata = vi.fn(async () => {
+      throw new Error("temporary connection failure");
+    });
+    const successfulSetMetadata = vi.fn(async () => undefined);
+    const successfulToStream = vi.fn(() => {
+      const audioStream = new PassThrough();
+      queueMicrotask(() => audioStream.end(Buffer.from("recovered")));
+      return { audioStream } as ReturnType<EdgeTtsClient["toStream"]>;
+    });
+
+    const clientFactory = vi
+      .fn<() => EdgeTtsClient>()
+      .mockReturnValueOnce({
+        setMetadata: failedSetMetadata,
+        toStream: vi.fn(),
+      } as EdgeTtsClient)
+      .mockReturnValueOnce({
+        setMetadata: successfulSetMetadata,
+        toStream: successfulToStream,
+      } as EdgeTtsClient);
+
+    const service = new TTSService({ clientFactory });
+
+    await expect(service.synthesize("hello")).rejects.toThrow("temporary connection failure");
+    await expect(service.synthesize("hello")).resolves.toEqual(Buffer.from("recovered"));
+
+    expect(clientFactory).toHaveBeenCalledTimes(2);
+    expect(successfulSetMetadata).toHaveBeenCalledTimes(1);
+    expect(successfulToStream).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,30 +1,105 @@
 import { describe, expect, it } from "vitest";
-import { createFacebookProcessedArticleSet } from "../src/connectors/facebook/preload";
-import { createTikTokProcessedElementSet } from "../src/connectors/tiktok/preload";
+import {
+  createFacebookProcessedArticleState,
+  takeNewFacebookComment,
+} from "../src/connectors/facebook/preload";
+import {
+  createTikTokProcessedElementState,
+  takeNewTikTokComment,
+} from "../src/connectors/tiktok/preload";
 
-function fakeElement(): Element {
-  return {} as Element;
+function mutableFacebookArticle(): {
+  element: Element;
+  setComment(username: string, text: string): void;
+} {
+  let username = "";
+  let text = "";
+
+  const element = {
+    getAttribute(name: string) {
+      if (name === "aria-label" && username) {
+        return `Comment by ${username} just now`;
+      }
+      return null;
+    },
+    querySelector() {
+      return null;
+    },
+    querySelectorAll(selector: string) {
+      if (selector.includes('dir="auto"') && text) {
+        return [{ textContent: text }];
+      }
+      return [];
+    },
+  } as unknown as Element;
+
+  return {
+    element,
+    setComment(nextUsername: string, nextText: string) {
+      username = nextUsername;
+      text = nextText;
+    },
+  };
+}
+
+function mutableTikTokMessage(username: string, initialText: string): {
+  element: Element;
+  setText(text: string): void;
+} {
+  let text = initialText;
+
+  const element = {
+    matches(selector: string) {
+      return selector.includes("chat-message");
+    },
+    querySelector(selector: string) {
+      if (selector.includes("message-owner-name")) {
+        return { textContent: username, getAttribute: () => null };
+      }
+      if (selector.includes("break-words")) {
+        return { textContent: text };
+      }
+      return null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+  } as unknown as Element;
+
+  return {
+    element,
+    setText(nextText: string) {
+      text = nextText;
+    },
+  };
 }
 
 describe("sandboxed preload element tracking", () => {
-  it("baselines existing Facebook DOM elements but allows distinct new elements", () => {
-    const historical = fakeElement();
-    const repeatedContentInNewElement = fakeElement();
-    const processed = createFacebookProcessedArticleSet([historical]);
+  it("does not baseline an incomplete Facebook article and emits it once populated", () => {
+    const article = mutableFacebookArticle();
+    const processed = createFacebookProcessedArticleState([article.element]);
 
-    expect(processed.has(historical)).toBe(true);
-    expect(processed.has(repeatedContentInNewElement)).toBe(false);
+    expect(takeNewFacebookComment(processed, article.element)).toBeNull();
 
-    processed.add(repeatedContentInNewElement);
-    expect(processed.has(repeatedContentInNewElement)).toBe(true);
+    article.setComment("Alice", "comment arrived after container creation");
+    expect(takeNewFacebookComment(processed, article.element)).toEqual({
+      username: "Alice",
+      text: "comment arrived after container creation",
+    });
+    expect(takeNewFacebookComment(processed, article.element)).toBeNull();
   });
 
-  it("baselines existing TikTok DOM elements by identity rather than comment text", () => {
-    const historical = fakeElement();
-    const sameTextLater = fakeElement();
-    const processed = createTikTokProcessedElementSet([historical]);
+  it("allows a reused TikTok element to emit when its comment content changes", () => {
+    const message = mutableTikTokMessage("Bob", "first comment");
+    const processed = createTikTokProcessedElementState([message.element]);
 
-    expect(processed.has(historical)).toBe(true);
-    expect(processed.has(sameTextLater)).toBe(false);
+    expect(takeNewTikTokComment(processed, message.element)).toBeNull();
+
+    message.setText("second comment");
+    expect(takeNewTikTokComment(processed, message.element)).toEqual({
+      username: "Bob",
+      text: "second comment",
+    });
+    expect(takeNewTikTokComment(processed, message.element)).toBeNull();
   });
 });

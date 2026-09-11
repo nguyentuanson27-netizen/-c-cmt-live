@@ -57,12 +57,41 @@ export function extractTikTokComment(el: Element): TikTokCommentPayload | null {
   return { username, text };
 }
 
-export function createTikTokProcessedElementSet(existingElements: Iterable<Element>): WeakSet<Element> {
-  const processedElements = new WeakSet<Element>();
+function commentSignature(comment: TikTokCommentPayload): string {
+  return JSON.stringify([comment.username, comment.text]);
+}
+
+export function createTikTokProcessedElementState(
+  existingElements: Iterable<Element>,
+): WeakMap<Element, string> {
+  const processedElements = new WeakMap<Element, string>();
+
   for (const element of existingElements) {
-    processedElements.add(element);
+    const comment = extractTikTokComment(element);
+    if (comment) {
+      processedElements.set(element, commentSignature(comment));
+    }
   }
+
   return processedElements;
+}
+
+export function takeNewTikTokComment(
+  processedElements: WeakMap<Element, string>,
+  element: Element,
+): TikTokCommentPayload | null {
+  const comment = extractTikTokComment(element);
+  if (!comment) {
+    return null;
+  }
+
+  const signature = commentSignature(comment);
+  if (processedElements.get(element) === signature) {
+    return null;
+  }
+
+  processedElements.set(element, signature);
+  return comment;
 }
 
 function init(): void {
@@ -99,19 +128,14 @@ function currentCommentElements(): Element[] {
 
 function setupCommentObserver(): void {
   // Keep this state local: sandboxed Electron preloads cannot require local CommonJS modules without bundling.
-  const processedElements = createTikTokProcessedElementSet(currentCommentElements());
+  const processedElements = createTikTokProcessedElementState(currentCommentElements());
 
   function processElement(el: Element): void {
-    if (processedElements.has(el)) {
-      return;
-    }
-
-    const comment = extractTikTokComment(el);
+    const comment = takeNewTikTokComment(processedElements, el);
     if (!comment) {
       return;
     }
 
-    processedElements.add(el);
     console.log(`[TIKTOK_CONNECTOR] Detected comment from ${comment.username}: ${comment.text}`);
     ipcRenderer.send("source:comment", {
       platform,
@@ -122,6 +146,22 @@ function setupCommentObserver(): void {
 
   function scanAll(): void {
     currentCommentElements().forEach(processElement);
+  }
+
+  function processMutationNode(node: Node): void {
+    const element = node.nodeType === 1 ? (node as Element) : node.parentElement;
+    if (!element) {
+      return;
+    }
+
+    const message = element.matches('[data-e2e="chat-message"]')
+      ? element
+      : element.closest('[data-e2e="chat-message"]');
+    if (message) {
+      processElement(message);
+    }
+
+    element.querySelectorAll('[data-e2e="chat-message"]').forEach(processElement);
   }
 
   let scanCount = 0;
@@ -135,25 +175,17 @@ function setupCommentObserver(): void {
 
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      for (const node of Array.from(mutation.addedNodes)) {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const el = node as Element;
-          if (el.matches?.('[data-e2e="chat-message"]')) {
-            processElement(el);
-          } else if (el.querySelectorAll) {
-            el.querySelectorAll('[data-e2e="chat-message"]').forEach(processElement);
-          }
-        }
-      }
+      processMutationNode(mutation.target);
+      Array.from(mutation.addedNodes).forEach(processMutationNode);
     }
   });
 
   const target = document.body || document.documentElement;
   if (target) {
-    observer.observe(target, { childList: true, subtree: true });
+    observer.observe(target, { childList: true, characterData: true, subtree: true });
   } else {
     window.addEventListener("DOMContentLoaded", () => {
-      observer.observe(document.body, { childList: true, subtree: true });
+      observer.observe(document.body, { childList: true, characterData: true, subtree: true });
     });
   }
 }

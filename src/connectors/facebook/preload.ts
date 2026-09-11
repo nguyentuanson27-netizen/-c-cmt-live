@@ -65,12 +65,41 @@ export function extractFacebookComment(article: Element): FacebookCommentPayload
   return { username, text };
 }
 
-export function createFacebookProcessedArticleSet(existingArticles: Iterable<Element>): WeakSet<Element> {
-  const processedArticles = new WeakSet<Element>();
+function commentSignature(comment: FacebookCommentPayload): string {
+  return JSON.stringify([comment.username, comment.text]);
+}
+
+export function createFacebookProcessedArticleState(
+  existingArticles: Iterable<Element>,
+): WeakMap<Element, string> {
+  const processedArticles = new WeakMap<Element, string>();
+
   for (const article of existingArticles) {
-    processedArticles.add(article);
+    const comment = extractFacebookComment(article);
+    if (comment) {
+      processedArticles.set(article, commentSignature(comment));
+    }
   }
+
   return processedArticles;
+}
+
+export function takeNewFacebookComment(
+  processedArticles: WeakMap<Element, string>,
+  article: Element,
+): FacebookCommentPayload | null {
+  const comment = extractFacebookComment(article);
+  if (!comment) {
+    return null;
+  }
+
+  const signature = commentSignature(comment);
+  if (processedArticles.get(article) === signature) {
+    return null;
+  }
+
+  processedArticles.set(article, signature);
+  return comment;
 }
 
 function init(): void {
@@ -93,21 +122,16 @@ if (typeof document !== "undefined") {
 
 function setupCommentObserver(): void {
   // Keep this state local: sandboxed Electron preloads cannot require local CommonJS modules without bundling.
-  const processedArticles = createFacebookProcessedArticleSet(
+  const processedArticles = createFacebookProcessedArticleState(
     document.querySelectorAll('[role="article"]'),
   );
 
   function processArticle(article: Element): void {
-    if (processedArticles.has(article)) {
-      return;
-    }
-
-    const comment = extractFacebookComment(article);
+    const comment = takeNewFacebookComment(processedArticles, article);
     if (!comment) {
       return;
     }
 
-    processedArticles.add(article);
     console.log(`[FB_CONNECTOR] Detected comment from ${comment.username}: ${comment.text}`);
     ipcRenderer.send("source:comment", {
       platform,
@@ -116,26 +140,34 @@ function setupCommentObserver(): void {
     });
   }
 
+  function processMutationNode(node: Node): void {
+    const element = node.nodeType === 1 ? (node as Element) : node.parentElement;
+    if (!element) {
+      return;
+    }
+
+    const article = element.matches('[role="article"]')
+      ? element
+      : element.closest('[role="article"]');
+    if (article) {
+      processArticle(article);
+    }
+
+    element.querySelectorAll('[role="article"]').forEach(processArticle);
+  }
+
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      for (const node of Array.from(mutation.addedNodes)) {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const el = node as Element;
-          if (el.getAttribute("role") === "article") {
-            processArticle(el);
-          } else {
-            el.querySelectorAll('[role="article"]').forEach(processArticle);
-          }
-        }
-      }
+      processMutationNode(mutation.target);
+      Array.from(mutation.addedNodes).forEach(processMutationNode);
     }
   });
 
   if (document.body) {
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
   } else {
     window.addEventListener("DOMContentLoaded", () => {
-      observer.observe(document.body, { childList: true, subtree: true });
+      observer.observe(document.body, { childList: true, characterData: true, subtree: true });
     });
   }
 }

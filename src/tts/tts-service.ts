@@ -38,12 +38,18 @@ export class TTSService {
   }
 
   private async ensureInit(): Promise<void> {
-    if (!this.client) {
-      this.client = this.clientFactory();
-      this.initPromise = this.client.setMetadata(this.voice, this.outputFormat);
-    }
-    if (this.initPromise) {
-      await this.initPromise;
+    try {
+      if (!this.client) {
+        this.client = this.clientFactory();
+        this.initPromise = this.client.setMetadata(this.voice, this.outputFormat);
+      }
+      if (this.initPromise) {
+        await this.initPromise;
+      }
+    } catch (error) {
+      this.client = null;
+      this.initPromise = null;
+      throw error;
     }
   }
 
