@@ -27,4 +27,17 @@ export class SseHub {
       }
     }
   }
+
+  public broadcastOne(event: SseEvent): boolean {
+    const payload = `data: ${JSON.stringify(event)}\n\n`;
+    for (const client of this.clients) {
+      try {
+        client.write(payload);
+        return true;
+      } catch {
+        this.clients.delete(client);
+      }
+    }
+    return false;
+  }
 }
