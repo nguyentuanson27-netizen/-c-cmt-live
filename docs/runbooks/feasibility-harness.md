@@ -2,7 +2,7 @@
 
 Use this runbook on a Windows machine with GUI access to prove the current live-comment capture route for Facebook, TikTok, and Shopee.
 
-This is a **hard gate**. Do not continue to the complete queue/TTS/multi-live implementation until all three platforms have a proven real-comment path.
+The **current hard gate** for shared core/TTS work is Facebook + TikTok runtime capture. Shopee capture/integration is deferred by the approved 2026-09-10 scope amendment and must pass before Shopee final integration and before the full three-platform MVP is complete.
 
 ## 1. What to prepare
 
@@ -45,12 +45,12 @@ The MVP supports one TikTok live at a time.
 
 #### Shopee VN
 
-Prepare:
+Prepare when Shopee integration resumes:
 
 - one Shopee shop/account that can actually use Shopee Live;
 - one buyer/viewer account to send comments.
 
-The MVP supports one Shopee live at a time.
+The MVP supports one Shopee live at a time. Shopee is currently deferred and is not required to unblock Facebook/TikTok core/TTS work.
 
 ## 2. Repository setup
 
@@ -185,7 +185,9 @@ Repeat with `_002` and `_003` and record the current capture boundary.
 
 Do not add an unofficial TikTok connector dependency while browser capture is sufficient.
 
-## 7. Shopee capture spike
+## 7. Shopee capture spike — deferred
+
+Run this section when Shopee integration resumes.
 
 1. Start a real Shopee Live using the shop/account. It is fine for the host live to be started from a phone if that is how the account normally operates.
 2. Select Shopee in the harness and open the viewer/live URL.
@@ -230,15 +232,15 @@ If a small pure parser can be regression-tested without adding unnecessary tooli
 
 ## 10. Gate result
 
-The feasibility phase is complete only when:
+The current Facebook/TikTok feasibility gate is complete only when:
 
 ```text
 Facebook  PASS
 TikTok    PASS
-Shopee    PASS
+Shopee    DEFERRED or PASS
 ```
 
-Each PASS must have:
+A required platform PASS must have:
 
 - a real live comment;
 - observed username;
@@ -247,7 +249,9 @@ Each PASS must have:
 - smallest corresponding connector code;
 - relevant repository checks actually run.
 
-If one platform FAILS, stop before full queue/TTS implementation. Record the blocker and at most 1–2 simplest evidence-based fallback options.
+If Facebook or TikTok fails, stop before shared core/TTS implementation and record the blocker plus at most 1–2 simplest evidence-based fallback options.
+
+Before the full three-platform MVP is complete, Shopee must be resumed and reach PASS with the same evidence standard.
 
 ## 11. Safety / sensitive data
 
