@@ -4,6 +4,7 @@ import { isPlatform, type Platform } from "./platform";
 import { getTrustedPlaybackFinishedPayload } from "./security/ipc";
 import { isAllowedPlatformUrl } from "./security/platform-url";
 import { createSourceWindow, type SourceWindow } from "./windows/source-window";
+import { FacebookSourceManager } from "./connectors/facebook/manager";
 import type { Comment } from "./core/comment";
 import { normalizeComment } from "./core/filter";
 import { CommentDedup } from "./core/dedup";
@@ -14,7 +15,8 @@ import { PlaybackManager } from "./tts/playback-manager";
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
-let activeSource: SourceWindow | null = null;
+const facebookManager = new FacebookSourceManager();
+let singleActiveSource: SourceWindow | null = null;
 
 const commentDedup = new CommentDedup({ windowMs: 60_000 });
 const commentQueue = new CommentQueue(30, 30_000);
@@ -112,11 +114,90 @@ function emitStatus(message: string, level: "info" | "error" = "info"): void {
   }
 }
 
-function closeActiveSource(): void {
-  if (activeSource && !activeSource.window.isDestroyed()) {
-    activeSource.window.close();
+function emitSourceList(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const list = [
+      ...facebookManager.list().map((s) => ({
+        id: s.id,
+        platform: "facebook" as const,
+        label: s.label,
+        url: s.url,
+      })),
+      ...(singleActiveSource && !singleActiveSource.window.isDestroyed()
+        ? [
+            {
+              id: String(singleActiveSource.window.id),
+              platform: singleActiveSource.platform,
+              label: singleActiveSource.platform.toUpperCase(),
+              url: singleActiveSource.url,
+            },
+          ]
+        : []),
+    ];
+    mainWindow.webContents.send("source:list", list);
   }
-  activeSource = null;
+}
+
+function closeSingleActiveSource(): void {
+  if (singleActiveSource && !singleActiveSource.window.isDestroyed()) {
+    singleActiveSource.window.close();
+  }
+  singleActiveSource = null;
+}
+
+function closeAllSources(): void {
+  facebookManager.closeAll();
+  closeSingleActiveSource();
+}
+
+type ResolvedSource = {
+  platform: Platform;
+  sourceId: string;
+  sourceLabel: string;
+  window: BrowserWindow;
+  url: string;
+};
+
+function resolveSourceBySenderId(senderId: number): ResolvedSource | null {
+  const fb = facebookManager.findByWebContentsId(senderId);
+  if (fb && !fb.source.window.isDestroyed()) {
+    return {
+      platform: "facebook",
+      sourceId: fb.id,
+      sourceLabel: fb.label,
+      window: fb.source.window,
+      url: fb.source.url,
+    };
+  }
+
+  if (
+    singleActiveSource &&
+    !singleActiveSource.window.isDestroyed() &&
+    singleActiveSource.window.webContents.id === senderId
+  ) {
+    return {
+      platform: singleActiveSource.platform,
+      sourceId: String(singleActiveSource.window.id),
+      sourceLabel: singleActiveSource.platform,
+      window: singleActiveSource.window,
+      url: singleActiveSource.url,
+    };
+  }
+
+  return null;
+}
+
+function extractSourceId(request: unknown): string | undefined {
+  if (typeof request === "string") {
+    return request;
+  }
+  if (request && typeof request === "object") {
+    const id = (request as Record<string, unknown>).sourceId;
+    if (typeof id === "string") {
+      return id;
+    }
+  }
+  return undefined;
 }
 
 function isOpenRequest(value: unknown): value is { platform: Platform; url: string } {
@@ -138,19 +219,34 @@ ipcMain.handle("source:open", async (event, request: unknown) => {
   }
 
   try {
-    closeActiveSource();
-    const source = createSourceWindow(request.platform, request.url);
-    activeSource = source;
+    if (request.platform === "facebook") {
+      const managed = facebookManager.open(request.url);
 
-    source.window.on("closed", () => {
-      if (activeSource?.window === source.window) {
-        activeSource = null;
-        emitStatus("Source window đã đóng.");
-      }
-    });
+      managed.source.window.on("closed", () => {
+        emitSourceList();
+        emitStatus(`Source Facebook (${managed.id}) đã đóng.`);
+      });
 
-    emitStatus(`Đang mở ${request.platform}...`);
-    return { ok: true };
+      emitStatus(`Đang mở Facebook (${managed.id})...`);
+      emitSourceList();
+      return { ok: true, sourceId: managed.id };
+    } else {
+      closeSingleActiveSource();
+      const source = createSourceWindow(request.platform, request.url);
+      singleActiveSource = source;
+
+      source.window.on("closed", () => {
+        if (singleActiveSource?.window === source.window) {
+          singleActiveSource = null;
+          emitSourceList();
+          emitStatus("Source window đã đóng.");
+        }
+      });
+
+      emitStatus(`Đang mở ${request.platform}...`);
+      emitSourceList();
+      return { ok: true, sourceId: String(source.window.id) };
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown source error";
     emitStatus(message, "error");
@@ -158,27 +254,85 @@ ipcMain.handle("source:open", async (event, request: unknown) => {
   }
 });
 
-ipcMain.handle("source:close", async (event) => {
+ipcMain.handle("source:close", async (event, request?: unknown) => {
   if (!isTrustedMainSender(event)) {
     return { ok: false };
   }
 
-  closeActiveSource();
-  emitStatus("Source window đã dừng.");
+  const sourceId = extractSourceId(request);
+
+  if (sourceId) {
+    if (facebookManager.get(sourceId)) {
+      facebookManager.close(sourceId);
+      emitSourceList();
+      emitStatus(`Source Facebook (${sourceId}) đã dừng.`);
+      return { ok: true };
+    }
+    if (singleActiveSource && String(singleActiveSource.window.id) === sourceId) {
+      closeSingleActiveSource();
+      emitSourceList();
+      emitStatus("Source window đã dừng.");
+      return { ok: true };
+    }
+    return { ok: false, error: "Source không tồn tại" };
+  }
+
+  if (singleActiveSource) {
+    closeSingleActiveSource();
+    emitSourceList();
+    emitStatus("Source window đã dừng.");
+    return { ok: true };
+  }
+
+  if (facebookManager.count() > 0) {
+    facebookManager.closeAll();
+    emitSourceList();
+    emitStatus("Tất cả Facebook sources đã đóng.");
+    return { ok: true };
+  }
+
   return { ok: true };
 });
 
-ipcMain.handle("source:devtools", async (event) => {
+ipcMain.handle("source:devtools", async (event, request?: unknown) => {
   if (!isTrustedMainSender(event)) {
     return { ok: false, error: "Untrusted IPC sender" };
   }
 
-  if (!activeSource || activeSource.window.isDestroyed()) {
-    return { ok: false, error: "Chưa có source window đang mở." };
+  const sourceId = extractSourceId(request);
+
+  if (sourceId) {
+    const managed = facebookManager.get(sourceId);
+    if (managed && !managed.source.window.isDestroyed()) {
+      managed.source.window.webContents.openDevTools({ mode: "detach" });
+      return { ok: true };
+    }
+    if (
+      singleActiveSource &&
+      !singleActiveSource.window.isDestroyed() &&
+      String(singleActiveSource.window.id) === sourceId
+    ) {
+      singleActiveSource.window.webContents.openDevTools({ mode: "detach" });
+      return { ok: true };
+    }
+    return { ok: false, error: "Source window không tìm thấy hoặc đã đóng." };
   }
 
-  activeSource.window.webContents.openDevTools({ mode: "detach" });
-  return { ok: true };
+  if (singleActiveSource && !singleActiveSource.window.isDestroyed()) {
+    singleActiveSource.window.webContents.openDevTools({ mode: "detach" });
+    return { ok: true };
+  }
+
+  const fbSources = facebookManager.list();
+  if (fbSources.length > 0) {
+    const last = fbSources[fbSources.length - 1];
+    if (!last.source.window.isDestroyed()) {
+      last.source.window.webContents.openDevTools({ mode: "detach" });
+      return { ok: true };
+    }
+  }
+
+  return { ok: false, error: "Chưa có source window đang mở." };
 });
 
 ipcMain.handle("tts:toggle", async (event) => {
@@ -201,11 +355,8 @@ ipcMain.handle("tts:clear-queue", async (event) => {
 });
 
 ipcMain.on("source:ready", (event: IpcMainEvent, payload: unknown) => {
-  if (!activeSource || activeSource.window.isDestroyed()) {
-    return;
-  }
-
-  if (event.sender.id !== activeSource.window.webContents.id) {
+  const resolved = resolveSourceBySenderId(event.sender.id);
+  if (!resolved) {
     return;
   }
 
@@ -215,22 +366,19 @@ ipcMain.on("source:ready", (event: IpcMainEvent, payload: unknown) => {
 
   const ready = payload as Record<string, unknown>;
   if (
-    ready.platform !== activeSource.platform ||
+    ready.platform !== resolved.platform ||
     typeof ready.url !== "string" ||
-    !isAllowedPlatformUrl(ready.url, activeSource.platform)
+    !isAllowedPlatformUrl(ready.url, resolved.platform)
   ) {
     return;
   }
 
-  emitStatus(`${activeSource.platform} source đã load. Mở DevTools để inspect comment DOM.`);
+  emitStatus(`[${resolved.sourceLabel}] source đã load. Mở DevTools để inspect comment DOM.`);
 });
 
 ipcMain.on("source:comment", (event: IpcMainEvent, payload: unknown) => {
-  if (!activeSource || activeSource.window.isDestroyed()) {
-    return;
-  }
-
-  if (event.sender.id !== activeSource.window.webContents.id) {
+  const resolved = resolveSourceBySenderId(event.sender.id);
+  if (!resolved) {
     return;
   }
 
@@ -240,15 +388,15 @@ ipcMain.on("source:comment", (event: IpcMainEvent, payload: unknown) => {
 
   const comment = payload as Record<string, unknown>;
   if (
-    comment.platform !== activeSource.platform ||
+    comment.platform !== resolved.platform ||
     typeof comment.username !== "string" ||
     typeof comment.text !== "string"
   ) {
     return;
   }
 
-  const currentUrl = activeSource.window.webContents.getURL();
-  if (!isAllowedPlatformUrl(currentUrl, activeSource.platform)) {
+  const currentUrl = resolved.window.webContents.getURL();
+  if (!isAllowedPlatformUrl(currentUrl, resolved.platform)) {
     return;
   }
 
@@ -264,9 +412,9 @@ ipcMain.on("source:comment", (event: IpcMainEvent, payload: unknown) => {
 
   const item: Comment = {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    platform: activeSource.platform,
-    sourceId: activeSource.window.id.toString(),
-    sourceLabel: activeSource.platform,
+    platform: resolved.platform,
+    sourceId: resolved.sourceId,
+    sourceLabel: resolved.sourceLabel,
     username: normalized.username,
     text: normalized.text,
     receivedAt: Date.now(),
@@ -284,8 +432,8 @@ ipcMain.on("source:comment", (event: IpcMainEvent, payload: unknown) => {
     });
   }
 
-  console.log(`[REAL COMMENT CAPTURED] [${activeSource.platform}] ${normalized.username}: ${normalized.text}`);
-  emitStatus(`[${activeSource.platform}] ${normalized.username}: ${normalized.text}`);
+  console.log(`[REAL COMMENT CAPTURED] [${item.sourceLabel}] ${normalized.username}: ${normalized.text}`);
+  emitStatus(`[${item.sourceLabel}] ${normalized.username}: ${normalized.text}`);
 
   void playbackManager.processNext();
 });
@@ -295,10 +443,11 @@ app.whenReady().then(() => {
 
   mainWindow.webContents.on("did-finish-load", () => {
     emitTtsStatus();
+    emitSourceList();
   });
 
   mainWindow.on("closed", () => {
-    closeActiveSource();
+    closeAllSources();
     playbackManager.setPaused(true);
     commentQueue.clear();
     mainWindow = null;

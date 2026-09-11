@@ -117,4 +117,77 @@ describe("FacebookSourceManager", () => {
     expect(() => manager.open("https://www.facebook.com/page-c/videos/3")).toThrow(/maximum.*2/i);
     expect(createSource).toHaveBeenCalledTimes(2);
   });
+
+  it("defaults to a maximum of 9 concurrent sources", () => {
+    const fakes = Array.from({ length: 9 }, (_, i) =>
+      fakeSource(i + 1, `https://www.facebook.com/page/videos/${i + 1}`),
+    );
+    const createSource = vi.fn(() => fakes.shift()!.source);
+    const manager = new FacebookSourceManager(createSource);
+
+    for (let i = 1; i <= 9; i++) {
+      manager.open(`https://www.facebook.com/page/videos/${i}`);
+    }
+
+    expect(manager.count()).toBe(9);
+    expect(() => manager.open("https://www.facebook.com/page/videos/10")).toThrow(/maximum.*9/i);
+    expect(createSource).toHaveBeenCalledTimes(9);
+  });
+
+  it("does not corrupt existing registry when source creation throws an error", () => {
+    const valid = fakeSource(1, "https://www.facebook.com/page-a/videos/1");
+    const createSource = vi.fn((url: string) => {
+      if (url.includes("invalid")) {
+        throw new Error("Invalid platform URL");
+      }
+      return valid.source;
+    });
+    const manager = new FacebookSourceManager(createSource);
+
+    manager.open("https://www.facebook.com/page-a/videos/1");
+    expect(manager.count()).toBe(1);
+
+    expect(() => manager.open("https://www.facebook.com/invalid")).toThrow("Invalid platform URL");
+    expect(manager.count()).toBe(1);
+    expect(manager.list().map((s) => s.id)).toEqual(["1"]);
+  });
+
+  it("returns false and leaves registry unchanged when closing an unknown id", () => {
+    const valid = fakeSource(5, "https://www.facebook.com/page-a/videos/5");
+    const manager = new FacebookSourceManager(() => valid.source);
+
+    manager.open(valid.source.url);
+    expect(manager.close("999")).toBe(false);
+    expect(manager.count()).toBe(1);
+  });
+
+  it("closes all sources and empties registry on closeAll", () => {
+    const first = fakeSource(1, "https://www.facebook.com/page-a/videos/1");
+    const second = fakeSource(2, "https://www.facebook.com/page-b/videos/2");
+    const created = [first, second];
+    const manager = new FacebookSourceManager(() => created.shift()!.source);
+
+    manager.open(first.source.url);
+    manager.open(second.source.url);
+    expect(manager.count()).toBe(2);
+
+    manager.closeAll();
+    expect(first.close).toHaveBeenCalledTimes(1);
+    expect(second.close).toHaveBeenCalledTimes(1);
+    expect(manager.count()).toBe(0);
+    expect(manager.list()).toHaveLength(0);
+  });
+
+  it("handles close safely when window is already destroyed", () => {
+    const first = fakeSource(1, "https://www.facebook.com/page-a/videos/1");
+    const manager = new FacebookSourceManager(() => first.source);
+
+    manager.open(first.source.url);
+    first.emitClosed(); // marks destroyed
+    expect(manager.count()).toBe(0);
+
+    // closing already removed/destroyed source returns false
+    expect(manager.close("1")).toBe(false);
+  });
 });
+

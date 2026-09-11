@@ -59,14 +59,14 @@ Follow `docs/runbooks/feasibility-harness.md` and record evidence in `tasks/capt
 
 ## Phase 5 — Platform integration
 
-- [ ] Facebook 1–9 concurrent live manager
+- [x] Facebook 1–9 concurrent live manager (implemented & automated/CI verified; runtime 2-live verification pending live session)
 - [ ] One TikTok live lifecycle finalization
 - [ ] One Shopee live lifecycle after deferred capture resumes
 - [ ] Platform mode switching stops previous mode and clears waiting queue
 
 ## Phase 6 — UI/config
 
-- [ ] Facebook URL rows up to 9
+- [x] Minimal multi-live source list UI with independent DevTools/Close controls (Task 7)
 - [ ] TikTok/Shopee single URL controls for completed platform integrations
 - [x] TTS controls/status
 - [x] Recent comment view

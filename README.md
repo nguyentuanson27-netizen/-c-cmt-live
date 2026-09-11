@@ -31,13 +31,18 @@ Repository đã qua feasibility cho **Facebook + TikTok** và đang ở giai đo
 - playback-completion IPC kiểm tra sender, playback id và payload shape;
 - TTS status, pause/resume, clear queue và recent comment view;
 - recent comment UI nhận structured payload, không parse lại status string;
+- `FacebookSourceManager` quản lý 1–9 Facebook Live đồng thời chia sẻ chung partition `persist:facebook`;
+- độc lập vòng đời start/stop giữa các Facebook sources, failure của một source không làm ảnh hưởng các source khác;
+- IPC routing và sender lookup chính xác theo `webContents.id`, comment giữ nguyên `sourceId` và `sourceLabel`;
+- minimal multi-live UI hiển thị danh sách sources đang mở kèm nút DevTools và Đóng từng source;
 - build-time runtime-module guard để renderer và sandboxed preloads không phát sinh unsupported `require(...)` sau `tsc`;
 - `package-lock.json`;
 - GitHub Actions CI chạy `npm ci` + typecheck + tests + build trên Windows và Ubuntu với Node 24.
 
-Chưa hoàn tất:
+Chưa hoàn tất / Pending:
 
-- Facebook manager cho 1–9 live đồng thời;
+- Runtime verification cho 2 Facebook Live đồng thời (pending live session);
+- Đo lường CPU/RAM khi mở rộng dần 3 → 9 lives sau khi 2-live pass;
 - Shopee real-comment capture/integration (deferred theo scope amendment ngày 2026-09-10);
 - local JSON config cho operator settings;
 - final Windows runtime verification/packaging.
