@@ -9,7 +9,10 @@ export type FacebookStartRequest = {
 
 export function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
-  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+  const unwrapped = normalized.startsWith("[") && normalized.endsWith("]")
+    ? normalized.slice(1, -1)
+    : normalized;
+  return unwrapped === "127.0.0.1" || unwrapped === "localhost" || unwrapped === "::1";
 }
 
 export function loadFacebookServerConfig(
