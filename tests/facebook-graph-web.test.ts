@@ -159,4 +159,31 @@ describe("Facebook Graph web connector", () => {
     expect(onCommentB).not.toHaveBeenCalled();
     poller.stop();
   });
+
+  it("returns the token-expired error when the initial Graph request gets code 190", async () => {
+    const fetchFn = vi.fn<GraphFetch>().mockResolvedValue(
+      jsonResponse(
+        { error: { code: 190, message: "Error validating access token: Session has expired" } },
+        400,
+      ),
+    );
+    const onStatus = vi.fn();
+    const poller = new FacebookGraphCommentPoller({ fetchFn });
+
+    const result = await poller.start(
+      { token: "EXPIRED", apiVersion: "v99.0", liveVideoIdOrUrl: "1234567890" },
+      { onComment: vi.fn(), onStatus },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: expect.stringContaining("invalid or expired"),
+    });
+    expect(poller.isActive).toBe(false);
+    expect(poller.activeLiveVideoId).toBeNull();
+    expect(onStatus).toHaveBeenCalledWith(
+      expect.stringContaining("invalid or expired"),
+      "error",
+    );
+  });
 });
