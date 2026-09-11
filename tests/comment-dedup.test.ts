@@ -47,4 +47,42 @@ describe('comment deduplication', () => {
     expect(dedup.isDuplicate('a', 'b:c', now + 1000)).toBe(false);
     expect(dedup.isDuplicate('a:b', 'c', now + 1000)).toBe(true);
   });
+
+  it('identifies identical comment from same source and user within window as duplicate', () => {
+    const dedup = new CommentDedup({ windowMs: 10000 });
+    const now = 100000;
+
+    expect(dedup.isDuplicate('source-1', 'Alice', 'áo size M còn không', now)).toBe(false);
+    dedup.record('source-1', 'Alice', 'áo size M còn không', now);
+
+    expect(dedup.isDuplicate('source-1', 'Alice', 'áo size M còn không', now + 1000)).toBe(true);
+    expect(dedup.isDuplicate('source-1', 'alice', 'ÁO SIZE M CÒN KHÔNG', now + 2000)).toBe(true);
+
+    // Different comment text from same user on same source must NOT be duplicate
+    expect(dedup.isDuplicate('source-1', 'Alice', 'chốt size L nhé', now + 3000)).toBe(false);
+  });
+
+  it('allows identical comment from same user on different sources within window', () => {
+    const dedup = new CommentDedup({ windowMs: 10000 });
+    const now = 100000;
+
+    dedup.record('source-1', 'Alice', 'áo size M còn không', now);
+
+    // Same username + text from a different source must NOT be dropped as duplicate
+    expect(dedup.isDuplicate('source-2', 'Alice', 'áo size M còn không', now + 1000)).toBe(false);
+
+    // But same source still is duplicate
+    expect(dedup.isDuplicate('source-1', 'Alice', 'áo size M còn không', now + 1000)).toBe(true);
+  });
+
+  it('does not collide when sourceId contains colons or special characters', () => {
+    const dedup = new CommentDedup();
+    const now = 100000;
+
+    dedup.record('source:1', 'Alice', 'text', now);
+
+    expect(dedup.isDuplicate('source', '1:Alice', 'text', now + 1000)).toBe(false);
+    expect(dedup.isDuplicate('source:1', 'Alice', 'text', now + 1000)).toBe(true);
+  });
 });
+

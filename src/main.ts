@@ -4,6 +4,7 @@ import { isPlatform, type Platform } from "./platform";
 import { getTrustedPlaybackFinishedPayload } from "./security/ipc";
 import { isAllowedPlatformUrl } from "./security/platform-url";
 import { createSourceWindow, type SourceWindow } from "./windows/source-window";
+import { preparePlatformSwitch } from "./windows/platform-switch";
 import { FacebookSourceManager } from "./connectors/facebook/manager";
 import type { Comment } from "./core/comment";
 import { normalizeComment } from "./core/filter";
@@ -219,6 +220,11 @@ ipcMain.handle("source:open", async (event, request: unknown) => {
   }
 
   try {
+    preparePlatformSwitch(request.platform, {
+      closeFacebookSources: () => facebookManager.closeAll(),
+      closeSingleSource: () => closeSingleActiveSource(),
+    });
+
     if (request.platform === "facebook") {
       const managed = facebookManager.open(request.url);
 
@@ -231,7 +237,6 @@ ipcMain.handle("source:open", async (event, request: unknown) => {
       emitSourceList();
       return { ok: true, sourceId: managed.id };
     } else {
-      closeSingleActiveSource();
       const source = createSourceWindow(request.platform, request.url);
       singleActiveSource = source;
 
@@ -405,10 +410,10 @@ ipcMain.on("source:comment", (event: IpcMainEvent, payload: unknown) => {
     return;
   }
 
-  if (commentDedup.isDuplicate(normalized.username, normalized.text)) {
+  if (commentDedup.isDuplicate(resolved.sourceId, normalized.username, normalized.text)) {
     return;
   }
-  commentDedup.record(normalized.username, normalized.text);
+  commentDedup.record(resolved.sourceId, normalized.username, normalized.text);
 
   const item: Comment = {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
