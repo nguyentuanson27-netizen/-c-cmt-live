@@ -56,6 +56,15 @@ type PageResult = {
   after?: string;
 };
 
+class FacebookGraphApiError extends Error {
+  constructor(
+    message: string,
+    public readonly code?: number,
+  ) {
+    super(message);
+  }
+}
+
 const FACEBOOK_HOST = "facebook.com";
 
 function isFacebookHostname(hostname: string): boolean {
@@ -191,7 +200,13 @@ export class FacebookGraphCommentPoller {
         return { ok: false, error: "Facebook Graph connection was superseded" };
       }
       const message = this.errorMessage(error);
+      const tokenExpired = error instanceof FacebookGraphApiError && error.code === 190;
       this.invalidateRun(false);
+      if (tokenExpired) {
+        const detail = `Page Access Token is invalid or expired: ${message}`;
+        events.onStatus(`[FB-API] ${detail}`, "error");
+        return { ok: false, error: detail };
+      }
       return { ok: false, error: message };
     }
   }
@@ -325,6 +340,15 @@ export class FacebookGraphCommentPoller {
       if (!this.isCurrentRun(runId) || !this.active) {
         return;
       }
+
+      if (error instanceof FacebookGraphApiError && error.code === 190) {
+        const events = this.events;
+        const message = this.errorMessage(error);
+        this.invalidateRun(false);
+        events?.onStatus(`[FB-API] Page Access Token is invalid or expired: ${message}`, "error");
+        return;
+      }
+
       this.events.onStatus(`[FB-API] ${this.errorMessage(error)}`, "error");
     }
   }
@@ -355,13 +379,10 @@ export class FacebookGraphCommentPoller {
 
     const payload = (await response.json()) as GraphCommentsResponse;
     if (payload.error) {
-      const message = payload.error.message || "Facebook Graph API error";
-      if (payload.error.code === 190) {
-        const events = this.events;
-        this.invalidateRun(false);
-        events?.onStatus(`[FB-API] Page Access Token is invalid or expired: ${message}`, "error");
-      }
-      throw new Error(message);
+      throw new FacebookGraphApiError(
+        payload.error.message || "Facebook Graph API error",
+        payload.error.code,
+      );
     }
 
     if (!response.ok) {
