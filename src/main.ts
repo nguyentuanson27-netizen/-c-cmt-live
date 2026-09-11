@@ -6,6 +6,7 @@ import { isAllowedPlatformUrl } from "./security/platform-url";
 import { createSourceWindow, type SourceWindow } from "./windows/source-window";
 import { preparePlatformSwitch } from "./windows/platform-switch";
 import { FacebookSourceManager } from "./connectors/facebook/manager";
+import { FacebookGraphApiConnector, type FacebookApiComment } from "./connectors/facebook/graph-api-connector";
 import type { Comment } from "./core/comment";
 import { normalizeComment } from "./core/filter";
 import { CommentDedup } from "./core/dedup";
@@ -17,6 +18,7 @@ app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
 const facebookManager = new FacebookSourceManager();
+const facebookGraphConnector = new FacebookGraphApiConnector();
 let singleActiveSource: SourceWindow | null = null;
 
 const commentDedup = new CommentDedup({ windowMs: 60_000 });
@@ -115,6 +117,17 @@ function emitStatus(message: string, level: "info" | "error" = "info"): void {
   }
 }
 
+function emitApiStatus(message: string, level: "info" | "error" = "info"): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("api:facebook:status-changed", {
+      active: facebookGraphConnector.isActive,
+      liveVideoId: facebookGraphConnector.activeLiveVideoId,
+      message,
+      level,
+    });
+  }
+}
+
 function emitSourceList(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     const list = [
@@ -147,6 +160,7 @@ function closeSingleActiveSource(): void {
 }
 
 function closeAllSources(): void {
+  facebookGraphConnector.stop();
   facebookManager.closeAll();
   closeSingleActiveSource();
 }
@@ -357,6 +371,92 @@ ipcMain.handle("tts:clear-queue", async (event) => {
   commentQueue.clear();
   emitTtsStatus();
   return { ok: true };
+});
+
+function handleApiComment(apiComment: FacebookApiComment): void {
+  const normalized = normalizeComment(apiComment.username, apiComment.text);
+  if (!normalized) {
+    return;
+  }
+
+  const sourceId = "facebook-graph-api";
+  if (commentDedup.isDuplicate(sourceId, normalized.username, normalized.text)) {
+    return;
+  }
+  commentDedup.record(sourceId, normalized.username, normalized.text);
+
+  const item: Comment = {
+    id: apiComment.id || `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    platform: "facebook",
+    sourceId,
+    sourceLabel: "FB-API",
+    username: normalized.username,
+    text: normalized.text,
+    receivedAt: apiComment.timestamp || Date.now(),
+  };
+
+  commentQueue.enqueue(item);
+  emitTtsStatus();
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("comment:accepted", {
+      platform: item.platform,
+      sourceLabel: item.sourceLabel,
+      username: item.username,
+      text: item.text,
+    });
+  }
+
+  console.log(`[API COMMENT CAPTURED] [${item.sourceLabel}] ${normalized.username}: ${normalized.text}`);
+  emitStatus(`[${item.sourceLabel}] ${normalized.username}: ${normalized.text}`);
+
+  void playbackManager.processNext();
+}
+
+ipcMain.handle("api:facebook:start", async (event, config: unknown) => {
+  if (!isTrustedMainSender(event)) {
+    return { ok: false, error: "Untrusted IPC sender" };
+  }
+
+  if (!config || typeof config !== "object") {
+    return { ok: false, error: "Cấu hình API không hợp lệ." };
+  }
+
+  const cfg = config as Record<string, unknown>;
+  const token = typeof cfg.token === "string" ? cfg.token : "";
+  const liveIdOrUrl = typeof cfg.liveIdOrUrl === "string" ? cfg.liveIdOrUrl : undefined;
+  const pollIntervalMs = typeof cfg.pollIntervalMs === "number" ? cfg.pollIntervalMs : 1000;
+
+  const res = await facebookGraphConnector.start(
+    { token, liveVideoIdOrUrl: liveIdOrUrl, pollIntervalMs },
+    {
+      onComment: (c) => handleApiComment(c),
+      onStatus: (msg, lvl) => emitApiStatus(msg, lvl),
+    }
+  );
+
+  return res;
+});
+
+ipcMain.handle("api:facebook:stop", async (event) => {
+  if (!isTrustedMainSender(event)) {
+    return { ok: false };
+  }
+
+  facebookGraphConnector.stop();
+  emitApiStatus("Đã dừng kết nối Graph API.", "info");
+  return { ok: true };
+});
+
+ipcMain.handle("api:facebook:status", async (event) => {
+  if (!isTrustedMainSender(event)) {
+    return { active: false };
+  }
+
+  return {
+    active: facebookGraphConnector.isActive,
+    liveVideoId: facebookGraphConnector.activeLiveVideoId,
+  };
 });
 
 ipcMain.on("source:ready", (event: IpcMainEvent, payload: unknown) => {

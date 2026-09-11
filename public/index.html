@@ -17,21 +17,42 @@
         Hệ thống tự động đọc bình luận livestream Facebook & TikTok với giọng tiếng Việt Edge TTS.
       </p>
 
-      <label for="platform">Nền tảng</label>
-      <select id="platform">
-        <option value="facebook">Facebook</option>
-        <option value="tiktok">TikTok</option>
-        <option value="shopee">Shopee</option>
-      </select>
+      <section aria-labelledby="api-heading" style="background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 14px; margin-bottom: 18px;">
+        <h2 id="api-heading" style="margin-top: 0; font-size: 1.1em; color: #0969da;">Facebook Page API (Khuyên dùng cho Page quản lý)</h2>
+        <p style="margin: 0 0 10px 0; font-size: 0.85em; color: #57606a;">
+          Lấy bình luận trực tiếp qua Graph API: độ trễ &lt;1s, không cần mở trình duyệt, không tốn RAM, 100% không dính thông báo "vào xem".
+        </p>
+        <label for="fb-page-token" style="font-weight: 600; font-size: 0.9em;">Page Access Token</label>
+        <input id="fb-page-token" type="password" autocomplete="off" placeholder="Dán Page Access Token (EAA...) tại đây..." style="margin-bottom: 8px;" />
 
-      <label for="live-url">URL livestream</label>
-      <input id="live-url" type="url" autocomplete="off" placeholder="https://..." />
+        <label for="fb-live-id" style="font-weight: 600; font-size: 0.9em;">ID hoặc URL Live (Để trống nếu muốn tự động dò Live đang phát)</label>
+        <input id="fb-live-id" type="text" autocomplete="off" placeholder="Ví dụ: 1234567890 hoặc https://facebook.com/..." style="margin-bottom: 10px;" />
 
-      <div class="actions">
-        <button id="open-source" type="button">Mở source</button>
-        <button id="open-devtools" type="button">Mở DevTools</button>
-        <button id="close-source" type="button">Đóng source</button>
-      </div>
+        <div class="actions">
+          <button id="start-fb-api" type="button" style="background-color: #2da44e; color: #fff; font-weight: 600;">Bắt đầu đọc API</button>
+          <button id="stop-fb-api" type="button" disabled>Dừng kết nối API</button>
+        </div>
+        <p id="fb-api-status" style="font-size: 0.88em; margin: 8px 0 0 0; color: #57606a;">Trạng thái API: <em>Chưa kết nối</em></p>
+      </section>
+
+      <section aria-labelledby="dom-heading" style="margin-top: 10px;">
+        <h2 id="dom-heading" style="font-size: 1.05em; color: #24292f;">Chế độ Trình duyệt (DOM — Live ngoài / TikTok / Shopee)</h2>
+        <label for="platform">Nền tảng</label>
+        <select id="platform">
+          <option value="facebook">Facebook</option>
+          <option value="tiktok">TikTok</option>
+          <option value="shopee">Shopee</option>
+        </select>
+
+        <label for="live-url">URL livestream</label>
+        <input id="live-url" type="url" autocomplete="off" placeholder="https://..." />
+
+        <div class="actions">
+          <button id="open-source" type="button">Mở source</button>
+          <button id="open-devtools" type="button">Mở DevTools</button>
+          <button id="close-source" type="button">Đóng source</button>
+        </div>
+      </section>
 
       <section aria-labelledby="sources-heading">
         <h2 id="sources-heading">Sources đang mở (<span id="source-count">0</span>)</h2>

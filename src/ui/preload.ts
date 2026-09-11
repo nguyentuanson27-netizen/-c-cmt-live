@@ -32,6 +32,13 @@ export type SourceItem = {
   url: string;
 };
 
+export type FacebookApiStatusPayload = {
+  active: boolean;
+  liveVideoId?: string;
+  message?: string;
+  level?: "info" | "error";
+};
+
 contextBridge.exposeInMainWorld("liveCommentTts", {
   openSource: (platform: Platform, url: string) => ipcRenderer.invoke("source:open", { platform, url }),
   closeSource: (sourceId?: string) => ipcRenderer.invoke("source:close", { sourceId }),
@@ -65,5 +72,14 @@ contextBridge.exposeInMainWorld("liveCommentTts", {
     const listener = (_event: unknown, status: TtsStatusPayload) => callback(status);
     ipcRenderer.on("tts:status", listener);
     return () => ipcRenderer.removeListener("tts:status", listener);
+  },
+  startFacebookApi: (config: { token: string; liveIdOrUrl?: string; pollIntervalMs?: number }) =>
+    ipcRenderer.invoke("api:facebook:start", config),
+  stopFacebookApi: () => ipcRenderer.invoke("api:facebook:stop"),
+  getFacebookApiStatus: () => ipcRenderer.invoke("api:facebook:status"),
+  onFacebookApiStatus: (callback: (status: FacebookApiStatusPayload) => void) => {
+    const listener = (_event: unknown, status: FacebookApiStatusPayload) => callback(status);
+    ipcRenderer.on("api:facebook:status-changed", listener);
+    return () => ipcRenderer.removeListener("api:facebook:status-changed", listener);
   },
 });
