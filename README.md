@@ -21,11 +21,12 @@ Repository đã qua feasibility cho **Facebook + TikTok** và đang ở giai đo
 - platform URL allowlist và popup/navigation restrictions;
 - Facebook real-comment parser/capture đã có runtime evidence;
 - TikTok real-comment parser/capture đã có runtime evidence;
-- startup baseline theo DOM element identity để comment đã có sẵn không bị coi là comment mới;
+- startup baseline theo DOM element + comment signature để comment đã có sẵn không bị coi là comment mới, đồng thời vẫn xử lý được node bị tái sử dụng hoặc render nội dung theo nhiều bước;
 - core normalize/filter/dedup/bounded FIFO queue + stale skip;
 - collision-safe core dedup key với sliding window;
 - `msedge-tts` với voice mặc định `vi-VN-HoaiMyNeural`;
 - sequential playback, retry một lần rồi skip khi lỗi;
+- TTS init lỗi sẽ reset client để lần retry thực sự tạo kết nối mới;
 - XML/SSML escaping cho untrusted comment text trước khi gửi vào TTS library;
 - playback-completion IPC kiểm tra sender, playback id và payload shape;
 - TTS status, pause/resume, clear queue và recent comment view;
@@ -139,7 +140,7 @@ npm run dev
 
 Facebook và TikTok connector dùng DOM boundary đã được ghi lại trong `tasks/capture-findings.md`.
 
-Khi connector khởi động, các comment element đang tồn tại trong DOM được đánh dấu là baseline nhưng **không emit** vào pipeline. Connector chỉ dùng DOM element identity để tránh xử lý lại cùng node; content dedup thuộc về core `CommentDedup` với sliding window, nên một comment giống hệt xuất hiện lại ở một element mới không bị connector chặn vĩnh viễn.
+Khi connector khởi động, các comment element đang tồn tại và parse được sẽ được lưu với content signature nhưng **không emit** vào pipeline. Khi DOM thay đổi, connector re-check comment container gần mutation; cùng một element chỉ bị bỏ qua khi signature không đổi. Vì vậy comment được render theo nhiều bước hoặc virtualized node được tái sử dụng cho nội dung mới vẫn có thể emit. Content dedup giữa các element vẫn thuộc về core `CommentDedup` với sliding window.
 
 Platform-specific selectors/network behavior vẫn phải được runtime-verify khi platform thay đổi; unit test không thay thế real-live verification.
 
