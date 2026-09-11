@@ -2,6 +2,14 @@ import { ipcRenderer } from "electron";
 
 const platform = "facebook" as const;
 
+export const FACEBOOK_COMMENT_OBSERVER_OPTIONS: MutationObserverInit = {
+  childList: true,
+  characterData: true,
+  attributes: true,
+  attributeFilter: ["aria-label"],
+  subtree: true,
+};
+
 export type FacebookCommentPayload = {
   username: string;
   text: string;
@@ -164,10 +172,10 @@ function setupCommentObserver(): void {
   });
 
   if (document.body) {
-    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+    observer.observe(document.body, FACEBOOK_COMMENT_OBSERVER_OPTIONS);
   } else {
     window.addEventListener("DOMContentLoaded", () => {
-      observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+      observer.observe(document.body, FACEBOOK_COMMENT_OBSERVER_OPTIONS);
     });
   }
 }
