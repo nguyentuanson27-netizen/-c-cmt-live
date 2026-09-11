@@ -7,36 +7,43 @@
 - [x] Record migration ADR and implementation plan.
 
 ## Task 1 — Facebook Graph connector
-- [ ] RED tests for ID/URL validation.
-- [ ] RED test that access token is not placed in request URL.
-- [ ] RED test for baseline + new comment emission.
-- [ ] RED test for multi-page burst catch-up.
-- [ ] RED test for stop/restart stale-request isolation.
-- [ ] Implement connector and make focused tests GREEN.
+- [x] RED tests for ID/URL validation and connector contract.
+- [x] RED test that access token is not placed in request URL.
+- [x] Test baseline + new comment emission.
+- [x] Test multi-page burst catch-up.
+- [x] Test stop/restart stale-request isolation.
+- [x] RED regression test for code-190 token expiry, followed by GREEN fix.
+- [x] Implement connector and make focused tests GREEN.
 
 ## Task 2 — Web server/SSE
-- [ ] Add loopback HTTP server and static web UI.
-- [ ] Read `FACEBOOK_PAGE_ACCESS_TOKEN` and `FACEBOOK_GRAPH_API_VERSION` server-side only.
-- [ ] Add start/stop/status endpoints with bounded JSON parsing.
-- [ ] Add SSE event stream and security headers.
-- [ ] Add server boundary tests.
+- [x] Add loopback HTTP server and static web UI.
+- [x] Read `FACEBOOK_PAGE_ACCESS_TOKEN` and `FACEBOOK_GRAPH_API_VERSION` server-side only.
+- [x] Add start/stop/status endpoints with bounded JSON parsing.
+- [x] Add SSE event stream and security headers.
+- [x] Add focused server-boundary tests.
 
 ## Task 3 — Core/TTS
-- [ ] Scope dedup by live source without breaking legacy tests.
-- [ ] Route Graph comments through normalize → dedup → queue.
-- [ ] Synthesize Edge TTS on server.
-- [ ] Send one audio item at a time to browser and await playback completion.
-- [ ] Keep pause/resume/clear queue controls.
+- [x] Reset single-live dedup state on source start and retain Live Video ID in source identity.
+- [x] Route Graph comments through normalize → dedup → bounded FIFO queue.
+- [x] Synthesize Edge TTS on server using existing exact `username: comment` formatting.
+- [x] Send one audio item at a time to browser and await matching playback completion.
+- [x] Keep pause/resume/clear queue controls.
 
-## Verify/review
-- [ ] Full `npm run typecheck` PASS.
-- [ ] Full `npm test` PASS.
-- [ ] Full `npm run build` PASS.
-- [ ] CI PASS on Ubuntu + Windows.
-- [ ] Security review: no token in browser storage, URL, logs or SSE payloads.
-- [ ] Runtime real Facebook Page comment PASS.
-- [ ] Record observed latency.
-- [ ] Keep PR Draft until runtime gate is complete.
+## Automated verification
+- [x] Full `npm run typecheck` PASS on code head `71bd2f49431fae14ef609d03117b6b2016dfb52a`.
+- [x] Full `npm test` PASS: 60/60 on code head `71bd2f49431fae14ef609d03117b6b2016dfb52a`.
+- [x] Full `npm run build` + runtime-module guard PASS on code head `71bd2f49431fae14ef609d03117b6b2016dfb52a`.
+- [x] CI PASS on Ubuntu + Windows for code head `71bd2f49431fae14ef609d03117b6b2016dfb52a`.
+- [x] Security/code self-review: no token in browser storage, Graph URL, logs or SSE payloads; browser cannot submit a token; local runtime refuses non-loopback binding.
+
+## Runtime verification — merge gate
+- [ ] Verify the actual Meta Graph API version and Page token permissions for the target Page/app.
+- [ ] Real managed Facebook Page comment PASS with exact username + marker text.
+- [ ] Existing comments remain baseline-only after connect.
+- [ ] Two quick comments play sequentially without overlap.
+- [ ] Record observed Graph→app / end-to-end latency.
+- [ ] Inspect browser storage, requests and server logs to confirm the Page token is absent.
+- [x] Keep PR Draft until the runtime gate above is complete.
 
 ## Deferred
 - [ ] 2→9 Facebook lives after single-live Graph runtime passes.
