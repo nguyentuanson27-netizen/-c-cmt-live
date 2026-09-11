@@ -5,6 +5,7 @@ import { isAllowedPlatformUrl, parsePlatformUrl } from "../security/platform-url
 
 export type SourceWindow = {
   platform: Platform;
+  url: string;
   window: BrowserWindow;
 };
 
@@ -54,5 +55,5 @@ export function createSourceWindow(platform: Platform, inputUrl: string): Source
 
   void window.loadURL(url.href);
 
-  return { platform, window };
+  return { platform, url: url.href, window };
 }
