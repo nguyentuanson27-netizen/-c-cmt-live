@@ -20,13 +20,11 @@ export function extractFacebookComment(article: Element): FacebookCommentPayload
 
   const aria = article.getAttribute("aria-label") || "";
   const viMatch = aria.match(/Bình luận (?:dưới tên|của)\s+(.+?)(?:\s+vào khoảng|\s+vừa xong|\s+vài giây|\s+\d|\.|$)/i);
+  const enMatch = aria.match(/Comment (?:from|by)\s+(.+?)(?:\s+about|\s+just now|\s+\d|\.|$)/i);
   if (viMatch && viMatch[1]) {
     username = viMatch[1].trim();
-  } else {
-    const enMatch = aria.match(/Comment (?:from|by)\s+(.+?)(?:\s+about|\s+just now|\s+\d|\.|$)/i);
-    if (enMatch && enMatch[1]) {
-      username = enMatch[1].trim();
-    }
+  } else if (enMatch && enMatch[1]) {
+    username = enMatch[1].trim();
   }
 
   if (!username) {
@@ -49,9 +47,36 @@ export function extractFacebookComment(article: Element): FacebookCommentPayload
     return null;
   }
 
+  const NOTIFICATION_JOIN_SUFFIX_REGEX = /\s+(?:vào|vào xem|tham gia|đã tham gia|vừa tham gia|đã chia sẻ|joined|is watching)$/i;
+  if (NOTIFICATION_JOIN_SUFFIX_REGEX.test(username)) {
+    return null;
+  }
+
   const candidates = Array.from(article.querySelectorAll('div[dir="auto"], span[dir="auto"]'));
   let text = "";
-  const IGNORED_ACTIONS = ["Thích", "Phản hồi", "Chia sẻ", "Dịch", "Like", "Reply", "Share", "Translate"];
+  const IGNORED_ACTIONS = [
+    "Thích",
+    "Phản hồi",
+    "Chia sẻ",
+    "Dịch",
+    "Like",
+    "Reply",
+    "Share",
+    "Translate",
+    "Người theo dõi hàng đầu",
+    "Người đóng góp hàng đầu",
+    "Top fan",
+    "Người xem thường xuyên",
+    "Tác giả",
+    "Author",
+    "Đang theo dõi",
+    "Follow",
+    "Chỉnh sửa",
+    "Đã chỉnh sửa",
+    "Edited",
+  ];
+  const NOTIFICATION_TEXT_EXACT_REGEX = /^(?:vào|vào xem|tham gia|đã tham gia|vừa tham gia|đã chia sẻ|joined|is watching)$/i;
+  const TIMESTAMP_REGEX = /^(?:vừa xong|vài giây(?: trước)?|just now|a few seconds ago|\d+\s*(?:phút|giây|giờ|ngày|tuần|tháng|năm|p|h|d|w|m|s|min|mins|hr|hrs)(?:\s+trước|\s+ago)?)$/i;
 
   for (const el of candidates) {
     const candidateText = el.textContent?.trim() || "";
@@ -59,7 +84,9 @@ export function extractFacebookComment(article: Element): FacebookCommentPayload
       candidateText &&
       candidateText !== username &&
       !IGNORED_ACTIONS.includes(candidateText) &&
-      !candidateText.startsWith("Bình luận")
+      !candidateText.startsWith("Bình luận") &&
+      !NOTIFICATION_TEXT_EXACT_REGEX.test(candidateText) &&
+      !TIMESTAMP_REGEX.test(candidateText)
     ) {
       text = candidateText;
       break;
@@ -67,6 +94,12 @@ export function extractFacebookComment(article: Element): FacebookCommentPayload
   }
 
   if (!text) {
+    return null;
+  }
+
+  const lowerUser = username.toLowerCase();
+  const lowerText = text.toLowerCase();
+  if (lowerUser === lowerText) {
     return null;
   }
 
