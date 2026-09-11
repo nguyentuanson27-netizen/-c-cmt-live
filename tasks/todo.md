@@ -40,13 +40,15 @@
 - [x] Security/code self-review: no token in browser storage, Graph URL, logs or SSE payloads; browser cannot submit a token; local runtime refuses non-loopback binding; failed replacement starts preserve the current live/queue; playback is single-browser-owned.
 
 ## Runtime verification — merge gate
-- [ ] Verify the actual Meta Graph API version and Page token permissions for the target Page/app.
-- [ ] Real managed Facebook Page comment PASS with exact username + marker text.
-- [ ] Existing comments remain baseline-only after connect.
-- [ ] Two quick comments play sequentially without overlap.
-- [ ] Record observed Graph→app / end-to-end latency.
-- [ ] Inspect browser storage, requests and server logs to confirm the Page token is absent.
-- [x] Keep PR Draft until the runtime gate above is complete.
+- [x] Verify the actual Meta Graph API version (`v22.0`) and Page token permissions for the target Page/app (`878177002056850`).
+- [x] Real managed Facebook Page comment PASS with exact username ("Ngọc Linh") + marker text ("GRAPH_TEST_001 xin chao").
+- [x] Existing comments remain baseline-only after connect (0 comments in recent, queue 0, 0 audio plays).
+- [x] Two quick comments play sequentially without overlap (Play #2 ended at 1789142398915, Play #3 started at 1789142399959).
+- [x] Record observed Graph→app / end-to-end latency (Graph → app: 1832 ms; Edge TTS playback: 4125 ms).
+- [x] Inspect browser storage, requests and server logs to confirm the Page token is absent (PASS - 0 occurrences found).
+- [x] Two-tab single playback & ownership handover on tab close verified.
+- [x] Edge TTS WebSocket reconnect bug identified, tested, and resolved.
+- [x] Runtime gate complete. PR #4 ready for review.
 
 ## Deferred
 - [ ] 2→9 Facebook lives after single-live Graph runtime passes.

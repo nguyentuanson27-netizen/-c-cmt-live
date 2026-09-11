@@ -295,3 +295,83 @@ Facebook and TikTok contain actual verified runtime evidence. Shopee is deferred
 - decision: `GO — proceed to core queue/TTS implementation`
 
 The runtime evidence above belongs to the spike commits. Changes to connector lifecycle logic on later heads require targeted real-live spot-checks before those later heads are called runtime-verified.
+
+---
+
+## Web Facebook Graph API Runtime Verification (PR #4)
+
+**Status:** PASS — ALL GATES VERIFIED
+
+### Environment
+
+- Date/time: 2026-09-11 23:00 (UTC+7)
+- OS: Windows 11 x64
+- Browser: Google Chrome (Headless CDP automation)
+- Server runtime: Node.js 24 on `http://127.0.0.1:3000`
+- Streaming source: Linux VPS (`139.162.18.93`) with `ffmpeg` RTMP stream ingest
+- Target Page: `878177002056850` (Ngọc Linh)
+- Graph API Version: `v22.0`
+- Active Live Video ID: `122134183275246192`
+- Underlying Video ID: `1599954895042823`
+
+### Observed Runtime Evidence
+
+1. **Baseline Gate (PASS)**
+   - Pre-existing comments sent before web app connection:
+     - `Old comment 1 before connect` (ID: `1599954895042823_1418592937121912`)
+     - `Old comment 2 before connect` (ID: `1599954895042823_2262729180935892`)
+   - Web app connected to Live Video `122134183275246192`.
+   - UI Status observed: `"Đã baseline Live 122134183275246192. Chờ comment mới…"`
+   - Pre-existing comments in recent list: `0` (expected 0)
+   - Queue: `Queue: 0` (expected Queue: 0)
+   - Audio plays triggered: `0` (expected 0)
+
+2. **Real Comment Flow & Latency Gate (PASS)**
+   - Comment sent via Graph API: `"GRAPH_TEST_001 xin chao"` (ID: `1599954895042823_1106946588430525`)
+   - Observed author: `"Ngọc Linh"`
+   - Observed badge: `"FB-API"`
+   - Observed Graph → app latency: `1832 ms`
+   - Edge TTS synthesis & browser Web Audio playback: `4125 ms` duration, status `done`.
+
+3. **Sequential TTS & FIFO Queue Gate (PASS)**
+   - Comments sent rapidly:
+     - `"GRAPH_TEST_002 comment thu hai"` (ID: `1599954895042823_1561088545066435`)
+     - `"GRAPH_TEST_003 comment thu ba"` (ID: `1599954895042823_1652894273147997`)
+   - Observed playback sequence:
+     - Play #2 (002): started at `1789142394290`, ended at `1789142398915` (duration `4625 ms`)
+     - Play #3 (003): started at `1789142399959`, ended at `1789142404504` (duration `4545 ms`)
+   - Non-overlap confirmed: `Play #3 start (1789142399959) >= Play #2 end (1789142398915)`
+   - Queue returned to `Queue: 0`.
+
+4. **Failed Replacement Regression Gate (PASS)**
+   - Invalid replacement Live ID submitted: `9999999999999999`
+   - UI status updated to error: `"Unsupported get request. Object with ID '9999999999999999' does not exist..."` (level: `error`)
+   - Server state verified: `active=true`, `liveVideoId=122134183275246192` (Live A preserved)
+   - Comment sent to Live A: `"GRAPH_TEST_004 still A"` (ID: `1599954895042823_1618197216451871`)
+   - Verified received and played audio without interruption.
+
+5. **Two-Tab Single Playback & Ownership Handover Gate (PASS)**
+   - Tab 2 opened; server reported `browserClients: 2`.
+   - Comment sent: `"GRAPH_TEST_005"` (ID: `1599954895042823_1871312767582235`)
+   - Both Tab 1 and Tab 2 received the comment in recent list.
+   - Tab 1 played audio (play count: 5); Tab 2 remained completely silent (play count: 0).
+   - Tab 1 closed; server reported `browserClients: 1`.
+   - Comment sent: `"GRAPH_TEST_006"` (ID: `1599954895042823_1693381098393920`)
+   - Tab 2 received comment, took playback ownership, and played audio (duration `3895 ms`).
+
+6. **Secret-Leak Check Gate (PASS)**
+   - Scanned browser `localStorage` and `sessionStorage`: zero token occurrences.
+   - Scanned network requests (URLs, bodies, headers): zero token occurrences.
+   - Scanned SSE stream payloads: zero token occurrences.
+   - Scanned server stdout/stderr logs: zero token occurrences.
+
+7. **Stop Test Gate (PASS)**
+   - Clicked "Dừng" in web UI; status reported: `"Đã dừng lấy comment."`
+   - Comment sent after stop: `"GRAPH_TEST_007 after stop"` (ID: `1599954895042823_2118433515440602`)
+   - Verified comment was NOT received in recent list, NOT enqueued, and NO audio was played.
+
+### Bug Discovered & Resolved
+
+- **Issue:** `TTSService` cached its `EdgeTtsClient` WebSocket instance indefinitely. When idle for ~35 seconds, Microsoft Edge TTS closes the WebSocket. Subsequent `synthesize()` calls reused the broken socket and failed with `"Stream closed before the synthesis completed"`.
+- **Resolution:** Added `resetClient()` in `src/tts/tts-service.ts` to invalidate `this.client` and `this.initPromise` whenever stream error, timeout, or exception occurs, ensuring automatic client re-initialization on subsequent synthesis calls. Added unit test in `tests/tts-service.test.ts`.
+
