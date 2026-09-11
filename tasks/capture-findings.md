@@ -4,6 +4,8 @@ Record only runtime evidence observed on current real livestream pages.
 
 Do not paste passwords, OTPs, cookies, tokens, authorization headers, browser storage dumps, or other sensitive session data here.
 
+Current-head implementation note: the original capture spikes used content-key `seenComments` sets. The current connector implementation keeps the last parsed comment signature per DOM element so startup content is baselined without permanently suppressing a virtualized/reused node. Cross-element content dedup remains owned by core `CommentDedup`.
+
 ## Gate summary
 
 | Platform | Status | Runtime date | Capture boundary | Notes |
@@ -66,7 +68,8 @@ Observed repeats:
   - Container: `div[role="article"]`
   - Username: `aria-label` pattern (`Bình luận dưới tên ... vào khoảng / vừa xong` and `Comment by ...`) with fallback to profile link `a[role="link"]`
   - Text: `div[dir="auto"]` within comment body excluding action controls
-  - Dynamic stream: `MutationObserver` on `document.body` for `[role="article"]` additions
+  - Dynamic stream observed during spike: `MutationObserver` on `document.body` for `[role="article"]` additions
+  - Current head additionally re-checks the nearest article on subtree/text mutations so staged rendering can complete before emit
 - Why this boundary was selected:
   - Semantic ARIA attributes (`role="article"`, `aria-label`) and internationalized text direction (`dir="auto"`) are resilient against minified CSS class changes.
   - Pure DOM observation avoids needing complex WebSocket/MQTT protocol reverse-engineering.
@@ -76,7 +79,8 @@ Observed repeats:
 - Files changed:
   - `src/connectors/facebook/preload.ts`: Added `extractFacebookComment` parser and `MutationObserver` emitting `source:comment`
   - `src/main.ts`: Added IPC handler `source:comment` with strict sender, platform, URL and string shape validation
-  - `tests/facebook-parser.test.ts`: Added 4 focused regression tests for DOM parser
+  - `tests/facebook-parser.test.ts`: Added focused parser regression tests
+  - `tests/preload-element-tracking.test.ts`: Covers startup/staged-render lifecycle behavior on the current head
 - Payload shape emitted:
   ```json
   {
@@ -85,14 +89,14 @@ Observed repeats:
     "text": "FB_TEST_001 con size M khong?"
   }
   ```
-- Sender/payload validation: Electron main checks `event.sender.id === activeSource.webContents.id`, validates non-empty string types, and checks URL allowlist.
-- Dedup behavior observed during spike: `seenComments` set on key `${username}:${text}` prevents re-emitting historical or duplicate mutations.
+- Sender/payload validation: Electron main checks `event.sender.id === activeSource.webContents.id`, validates string types, and checks URL allowlist before normalization.
+- Dedup behavior: the historical spike used a `seenComments` content key. Current head tracks the last signature per DOM element only for DOM lifecycle handling; recent duplicate content is suppressed by core `CommentDedup`.
 
 ### Verification actually run
 
 ```text
 npm run typecheck: PASS
-npm test: PASS (15/15 tests)
+npm test: PASS (15/15 tests at spike commit)
 npm run build: PASS
 Electron runtime: PASS
 Real comment capture: PASS (FB_TEST_001, FB_TEST_002, FB_TEST_003)
@@ -102,6 +106,7 @@ Real comment capture: PASS (FB_TEST_001, FB_TEST_002, FB_TEST_003)
 
 - If Facebook changes the `aria-label` translation phrasing, the fallback `a[role="link"]` maintains author extraction.
 - DOM classes are intentionally ignored in favor of semantic ARIA and `dir="auto"` attributes.
+- The current signature-based staged-render fix still requires a real-live runtime spot-check on the fixed head.
 
 ---
 
@@ -113,7 +118,7 @@ Real comment capture: PASS (FB_TEST_001, FB_TEST_002, FB_TEST_003)
 
 - Date/time: 2026-09-10 15:45 (UTC+7)
 - Windows version: Windows 10/11 x64
-- Electron/app commit: 5556214
+- Electron/app commit: d451540
 - Live URL shape (sanitize IDs if needed): https://www.tiktok.com/@.../live
 - Host/login flow notes: Manual TikTok login verified in persistent partition `persist:tiktok`. Live chat loaded with virtualized container.
 
@@ -166,16 +171,17 @@ Observed repeats:
   - Username: `[data-e2e="message-owner-name"]` (`title` attribute or `textContent`)
   - Text: `div.break-words` or `[class*="break-words"]`
   - System filter: filters out `joined`, `followed`, `shared` and elements missing username/text
-  - Dynamic stream: `scanAll()` immediate and periodic scan + `MutationObserver` on `document.body`
+  - Dynamic stream: periodic scan + `MutationObserver` on `document.body`; current head also re-checks the nearest message on subtree/text mutations
 - Why this boundary was selected:
-  - `data-e2e` attributes are official test hooks maintained by TikTok, providing resilience against minified Tailwind/CSS class names.
-  - Observing DOM avoids reverse-engineering TikTok WebSocket protobuf / encryption payloads.
+  - `data-e2e` attributes were observed on the current TikTok live DOM and are more stable than minified styling classes.
+  - Observing DOM avoids reverse-engineering TikTok WebSocket payloads.
 
 ### Connector changes
 
 - Files changed:
-  - `src/connectors/tiktok/preload.ts`: Implemented `extractTikTokComment`, `setupCommentObserver` with `MutationObserver`, immediate DOM scan, periodic scan, and IPC dispatch `source:comment`
-  - `tests/tiktok-parser.test.ts`: Added 7 comprehensive regression unit tests
+  - `src/connectors/tiktok/preload.ts`: Implemented `extractTikTokComment`, periodic scan, `MutationObserver`, and IPC dispatch `source:comment`
+  - `tests/tiktok-parser.test.ts`: Added focused parser regression tests
+  - `tests/preload-element-tracking.test.ts`: Covers virtualized node reuse on the current head
 - Payload shape emitted:
   ```json
   {
@@ -184,14 +190,14 @@ Observed repeats:
     "text": "kím chỗ xả ntinTele pé, dcChon"
   }
   ```
-- Sender/payload validation: Electron main checks `event.sender.id === activeSource.webContents.id`, non-empty strings, platform match, and URL allowlist.
-- Dedup behavior observed during spike: `seenComments` set on key `${username}:${text}` prevents re-emitting comments re-rendered by virtualized list scrolling.
+- Sender/payload validation: Electron main checks `event.sender.id === activeSource.webContents.id`, string types, platform match, and URL allowlist before normalization.
+- Dedup behavior: the historical spike used a `seenComments` content key. Current head tracks the last signature per DOM element so a reused virtualized node can emit changed content; core `CommentDedup` owns recent content dedup across elements.
 
 ### Verification actually run
 
 ```text
 npm run typecheck: PASS
-npm test: PASS (22/22 tests)
+npm test: PASS (22/22 tests at spike commit)
 npm run build: PASS
 Electron runtime: PASS
 Real comment capture: PASS
@@ -199,14 +205,15 @@ Real comment capture: PASS
 
 ### Known fragility / blocker
 
-- If TikTok alters `data-e2e` naming in future web app builds, fallbacks to `[title]` and class-based owner names are in place.
-- Virtualized list scrolls rapidly during high-volume lives; `seenComments` set prevents duplicate firing.
+- If TikTok alters `data-e2e` naming in future web app builds, the connector must be runtime-inspected again rather than guessing replacement selectors.
+- Virtualized list nodes can be reused; current head compares the last parsed signature per element so changed content is not permanently suppressed.
+- The current signature-based reuse fix still requires a real-live runtime spot-check on the fixed head.
 
 ---
 
 ## Shopee
 
-**Status:** NOT TESTED
+**Status:** DEFERRED / NOT TESTED
 
 ### Environment
 
@@ -260,16 +267,16 @@ SP_TEST_003 mau den con khong?
 ### Verification actually run
 
 ```text
-npm run typecheck: NOT RUN
-npm test: NOT RUN
-npm run build: NOT RUN
-Electron runtime: NOT RUN
+npm run typecheck: NOT RUN for Shopee capture
+npm test: NOT RUN for Shopee capture
+npm run build: NOT RUN for Shopee capture
+Electron runtime: NOT RUN for Shopee capture
 Real comment capture: NOT RUN
 ```
 
 ### Known fragility / blocker
 
-- —
+- Deferred by product owner decision; resume before Shopee final integration/full three-platform completion.
 
 ---
 
@@ -279,10 +286,12 @@ Facebook and TikTok contain actual verified runtime evidence. Shopee is deferred
 
 **Decision:** GO — proceed to core queue/TTS implementation
 
-**Reason:** Facebook Live capture and TikTok Live capture are fully proven on current livestream DOM with real comments. Pipeline and Edge TTS development unblocked.
+**Reason:** Facebook Live capture and TikTok Live capture are proven on current livestream DOM with real comments. Pipeline and Edge TTS development are unblocked.
 
 - Facebook capture route: DOM (`role="article"`, `dir="auto"`)
 - TikTok capture route: DOM (`[data-e2e="chat-message"]`, `[data-e2e="message-owner-name"]`, `.break-words`)
-- Shopee capture route: Deferred (requires seller portal `live.shopee.vn/pc/setup`)
-- commit containing proven spike implementations: d451540
+- Shopee capture route: Deferred
+- commit containing proven Facebook/TikTok spike implementations: d451540
 - decision: `GO — proceed to core queue/TTS implementation`
+
+The runtime evidence above belongs to the spike commits. Changes to connector lifecycle logic on later heads require targeted real-live spot-checks before those later heads are called runtime-verified.
