@@ -13,6 +13,10 @@ type LiveCommentTtsApi = {
   toggleTts(): Promise<{ ok: boolean; isPaused: boolean }>;
   clearQueue(): Promise<{ ok: boolean }>;
   onTtsStatus(callback: (status: TtsStatusPayload) => void): () => void;
+  startFacebookApi(config: { token: string; liveIdOrUrl?: string; pollIntervalMs?: number }): Promise<{ ok: boolean; liveVideoId?: string; error?: string }>;
+  stopFacebookApi(): Promise<{ ok: boolean }>;
+  getFacebookApiStatus(): Promise<{ active: boolean; liveVideoId?: string }>;
+  onFacebookApiStatus(callback: (status: { active: boolean; liveVideoId?: string; message?: string; level?: "info" | "error" }) => void): () => void;
 };
 
 declare global {
@@ -242,4 +246,79 @@ function addRecentComment(comment: AcceptedCommentPayload): void {
   while (recentCommentsElement.children.length > 50) {
     recentCommentsElement.removeChild(recentCommentsElement.lastChild!);
   }
+}
+
+// Facebook Page Graph API Controls
+const startFbApiBtn = document.querySelector<HTMLButtonElement>("#start-fb-api");
+const stopFbApiBtn = document.querySelector<HTMLButtonElement>("#stop-fb-api");
+const fbTokenInput = document.querySelector<HTMLInputElement>("#fb-page-token");
+const fbLiveIdInput = document.querySelector<HTMLInputElement>("#fb-live-id");
+const fbApiStatusEl = document.querySelector<HTMLElement>("#fb-api-status");
+
+if (startFbApiBtn && stopFbApiBtn && fbTokenInput && fbLiveIdInput) {
+  const savedToken = localStorage.getItem("fb_page_token");
+  if (savedToken) {
+    fbTokenInput.value = savedToken;
+  }
+
+  startFbApiBtn.addEventListener("click", async () => {
+    const token = fbTokenInput.value.trim();
+    const liveIdOrUrl = fbLiveIdInput.value.trim();
+
+    if (!token) {
+      if (fbApiStatusEl) {
+        fbApiStatusEl.innerHTML = `<span style="color: #cf222e; font-weight: 600;">Vui lòng dán Page Access Token.</span>`;
+      }
+      return;
+    }
+
+    localStorage.setItem("fb_page_token", token);
+
+    if (fbApiStatusEl) {
+      fbApiStatusEl.innerHTML = `<span style="color: #0969da;">Đang kết nối Facebook Graph API...</span>`;
+    }
+    startFbApiBtn.disabled = true;
+
+    const res = await window.liveCommentTts.startFacebookApi({
+      token,
+      liveIdOrUrl: liveIdOrUrl || undefined,
+    });
+
+    if (!res.ok) {
+      startFbApiBtn.disabled = false;
+      stopFbApiBtn.disabled = true;
+      if (fbApiStatusEl) {
+        fbApiStatusEl.innerHTML = `<span style="color: #cf222e; font-weight: 600;">Lỗi: ${res.error || "Không thể kết nối"}</span>`;
+      }
+    } else {
+      startFbApiBtn.disabled = true;
+      stopFbApiBtn.disabled = false;
+      if (fbApiStatusEl) {
+        fbApiStatusEl.innerHTML = `<span style="color: #1a7f37; font-weight: 600;">Đang kết nối Live ID: ${res.liveVideoId}</span>`;
+      }
+    }
+  });
+
+  stopFbApiBtn.addEventListener("click", async () => {
+    await window.liveCommentTts.stopFacebookApi();
+    startFbApiBtn.disabled = false;
+    stopFbApiBtn.disabled = true;
+    if (fbApiStatusEl) {
+      fbApiStatusEl.innerHTML = `<em>Đã dừng kết nối API.</em>`;
+    }
+  });
+
+  window.liveCommentTts.onFacebookApiStatus((status) => {
+    if (status.active) {
+      startFbApiBtn.disabled = true;
+      stopFbApiBtn.disabled = false;
+    } else {
+      startFbApiBtn.disabled = false;
+      stopFbApiBtn.disabled = true;
+    }
+    if (fbApiStatusEl && status.message) {
+      const color = status.level === "error" ? "#cf222e" : (status.active ? "#1a7f37" : "#57606a");
+      fbApiStatusEl.innerHTML = `<span style="color: ${color}; font-weight: ${status.active ? 600 : 400};">${status.message}</span>`;
+    }
+  });
 }
