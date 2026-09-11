@@ -160,6 +160,54 @@ describe("Facebook Graph web connector", () => {
     poller.stop();
   });
 
+  it("keeps the active live running when a replacement live fails to baseline", async () => {
+    const fetchFn = vi
+      .fn<GraphFetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [
+            { id: "a-boundary", from: { name: "A" }, message: "baseline A", created_time: "2026-09-11T10:00:00Z" },
+          ],
+          paging: { cursors: {} },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { code: 100, message: "Unsupported get request" } }, 400),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [
+            { id: "a-new", from: { name: "Viewer A" }, message: "still live", created_time: "2026-09-11T10:00:01Z" },
+            { id: "a-boundary", from: { name: "A" }, message: "baseline A", created_time: "2026-09-11T10:00:00Z" },
+          ],
+          paging: { cursors: {} },
+        }),
+      );
+    const onCommentA = vi.fn();
+    const poller = new FacebookGraphCommentPoller({ fetchFn });
+
+    const startA = await poller.start(
+      { token: "TOKEN", apiVersion: "v99.0", liveVideoIdOrUrl: "111", pollIntervalMs: 60_000 },
+      { onComment: onCommentA, onStatus: vi.fn() },
+    );
+    expect(startA.ok).toBe(true);
+
+    const startB = await poller.start(
+      { token: "TOKEN", apiVersion: "v99.0", liveVideoIdOrUrl: "222", pollIntervalMs: 60_000 },
+      { onComment: vi.fn(), onStatus: vi.fn() },
+    );
+
+    expect(startB.ok).toBe(false);
+    expect(poller.isActive).toBe(true);
+    expect(poller.activeLiveVideoId).toBe("111");
+
+    await poller.pollNow();
+    expect(onCommentA).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a-new", username: "Viewer A", text: "still live" }),
+    );
+    poller.stop();
+  });
+
   it("returns the token-expired error when the initial Graph request gets code 190", async () => {
     const fetchFn = vi.fn<GraphFetch>().mockResolvedValue(
       jsonResponse(
