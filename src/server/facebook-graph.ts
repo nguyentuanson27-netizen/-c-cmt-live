@@ -25,6 +25,15 @@ export type FacebookGraphConfig = {
   maxPagesPerPoll?: number;
 };
 
+type ResolvedFacebookGraphConfig = {
+  token: string;
+  apiVersion: string;
+  liveVideoIdOrUrl: string;
+  pollIntervalMs: number;
+  pageSize: number;
+  maxPagesPerPoll: number;
+};
+
 type RawGraphComment = {
   id?: string;
   from?: { id?: string; name?: string };
@@ -115,13 +124,11 @@ export class FacebookGraphCommentPoller {
   private readonly fetchFn: GraphFetch;
   private timer: NodeJS.Timeout | null = null;
   private abortController: AbortController | null = null;
+  private pendingStartController: AbortController | null = null;
   private runId = 0;
+  private startAttemptId = 0;
   private active = false;
-  private config: Required<Pick<FacebookGraphConfig, "token" | "apiVersion" | "liveVideoIdOrUrl">> & {
-    pollIntervalMs: number;
-    pageSize: number;
-    maxPagesPerPoll: number;
-  } | null = null;
+  private config: ResolvedFacebookGraphConfig | null = null;
   private events: FacebookGraphEvents | null = null;
   private currentLiveVideoId: string | null = null;
   private boundaryCommentId: string | null = null;
@@ -142,9 +149,6 @@ export class FacebookGraphCommentPoller {
     config: FacebookGraphConfig,
     events: FacebookGraphEvents,
   ): Promise<{ ok: boolean; liveVideoId?: string; error?: string }> {
-    this.invalidateRun(false);
-    const runId = this.runId;
-
     const token = config.token.trim();
     if (!token) {
       return { ok: false, error: "Missing Facebook Page Access Token" };
@@ -160,33 +164,43 @@ export class FacebookGraphCommentPoller {
       return { ok: false, error: "Invalid Facebook Live video ID or URL" };
     }
 
-    const pollIntervalMs = Math.max(250, config.pollIntervalMs ?? 1000);
-    const pageSize = Math.min(100, Math.max(1, Math.floor(config.pageSize ?? 100)));
-    const maxPagesPerPoll = Math.min(50, Math.max(1, Math.floor(config.maxPagesPerPoll ?? 20)));
-
-    this.config = {
+    const candidateConfig: ResolvedFacebookGraphConfig = {
       token,
       apiVersion,
       liveVideoIdOrUrl: config.liveVideoIdOrUrl,
-      pollIntervalMs,
-      pageSize,
-      maxPagesPerPoll,
+      pollIntervalMs: Math.max(250, config.pollIntervalMs ?? 1000),
+      pageSize: Math.min(100, Math.max(1, Math.floor(config.pageSize ?? 100))),
+      maxPagesPerPoll: Math.min(50, Math.max(1, Math.floor(config.maxPagesPerPoll ?? 20))),
     };
-    this.events = events;
-    this.currentLiveVideoId = liveVideoId;
-    this.boundaryCommentId = null;
-    this.abortController = new AbortController();
+
+    this.pendingStartController?.abort();
+    const attemptId = ++this.startAttemptId;
+    const candidateController = new AbortController();
+    this.pendingStartController = candidateController;
 
     events.onStatus(`[FB-API] Connecting to Live Video ${liveVideoId}...`, "info");
 
     try {
-      const baseline = await this.fetchPage(runId);
-      if (!this.isCurrentRun(runId)) {
+      const baseline = await this.fetchPageWith(
+        candidateConfig,
+        liveVideoId,
+        candidateController.signal,
+      );
+      if (!this.isCurrentStartAttempt(attemptId)) {
         return { ok: false, error: "Facebook Graph connection was superseded" };
       }
 
+      this.pendingStartController = null;
+      this.invalidateRun(false);
+      const runId = this.runId;
+
+      this.config = candidateConfig;
+      this.events = events;
+      this.currentLiveVideoId = liveVideoId;
       this.boundaryCommentId = baseline.comments.find((comment) => Boolean(comment.id))?.id ?? null;
+      this.abortController = candidateController;
       this.active = true;
+
       events.onStatus(
         this.boundaryCommentId
           ? "[FB-API] Connected. Existing comments were baselined."
@@ -196,13 +210,13 @@ export class FacebookGraphCommentPoller {
       this.scheduleNext(runId);
       return { ok: true, liveVideoId };
     } catch (error) {
-      if (!this.isCurrentRun(runId)) {
+      if (!this.isCurrentStartAttempt(attemptId)) {
         return { ok: false, error: "Facebook Graph connection was superseded" };
       }
+
+      this.pendingStartController = null;
       const message = this.errorMessage(error);
-      const tokenExpired = error instanceof FacebookGraphApiError && error.code === 190;
-      this.invalidateRun(false);
-      if (tokenExpired) {
+      if (error instanceof FacebookGraphApiError && error.code === 190) {
         const detail = `Page Access Token is invalid or expired: ${message}`;
         events.onStatus(`[FB-API] ${detail}`, "error");
         return { ok: false, error: detail };
@@ -214,6 +228,9 @@ export class FacebookGraphCommentPoller {
   public stop(): void {
     const events = this.events;
     const wasActive = this.active || this.currentLiveVideoId !== null;
+    this.startAttemptId += 1;
+    this.pendingStartController?.abort();
+    this.pendingStartController = null;
     this.invalidateRun(false);
     if (wasActive) {
       events?.onStatus("[FB-API] Connection stopped.", "info");
@@ -247,6 +264,10 @@ export class FacebookGraphCommentPoller {
 
   private isCurrentRun(runId: number): boolean {
     return this.runId === runId;
+  }
+
+  private isCurrentStartAttempt(attemptId: number): boolean {
+    return this.startAttemptId === attemptId;
   }
 
   private scheduleNext(runId: number): void {
@@ -358,12 +379,26 @@ export class FacebookGraphCommentPoller {
       throw new Error("Facebook Graph connector is not active");
     }
 
+    return this.fetchPageWith(
+      this.config,
+      this.currentLiveVideoId,
+      this.abortController.signal,
+      after,
+    );
+  }
+
+  private async fetchPageWith(
+    config: ResolvedFacebookGraphConfig,
+    liveVideoId: string,
+    signal: AbortSignal,
+    after?: string,
+  ): Promise<PageResult> {
     const url = new URL(
-      `https://graph.facebook.com/${this.config.apiVersion}/${this.currentLiveVideoId}/comments`,
+      `https://graph.facebook.com/${config.apiVersion}/${liveVideoId}/comments`,
     );
     url.searchParams.set("order", "reverse_chronological");
     url.searchParams.set("fields", "id,from,message,created_time");
-    url.searchParams.set("limit", String(this.config.pageSize));
+    url.searchParams.set("limit", String(config.pageSize));
     if (after) {
       url.searchParams.set("after", after);
     }
@@ -372,9 +407,9 @@ export class FacebookGraphCommentPoller {
       method: "GET",
       headers: {
         accept: "application/json",
-        authorization: `Bearer ${this.config.token}`,
+        authorization: `Bearer ${config.token}`,
       },
-      signal: this.abortController.signal,
+      signal,
     });
 
     const payload = (await response.json()) as GraphCommentsResponse;
