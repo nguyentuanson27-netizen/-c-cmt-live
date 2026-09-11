@@ -1,9 +1,11 @@
+import type { ServerResponse } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import {
   isLoopbackHost,
   loadFacebookServerConfig,
   parseFacebookStartRequest,
 } from "../src/server/config";
+import { SseHub } from "../src/server/events";
 import { BrowserPlaybackBridge } from "../src/server/playback-bridge";
 
 describe("web runtime server boundaries", () => {
@@ -11,6 +13,7 @@ describe("web runtime server boundaries", () => {
     expect(isLoopbackHost("127.0.0.1")).toBe(true);
     expect(isLoopbackHost("localhost")).toBe(true);
     expect(isLoopbackHost("::1")).toBe(true);
+    expect(isLoopbackHost("[::1]")).toBe(true);
     expect(isLoopbackHost("0.0.0.0")).toBe(false);
     expect(isLoopbackHost("192.168.1.10")).toBe(false);
   });
@@ -44,6 +47,26 @@ describe("web runtime server boundaries", () => {
       error: expect.stringContaining("server"),
     });
     expect(parseFacebookStartRequest({ liveVideoIdOrUrl: "" }).ok).toBe(false);
+  });
+});
+
+describe("SSE delivery", () => {
+  it("sends playback to only one connected browser and transfers ownership after disconnect", () => {
+    const hub = new SseHub();
+    const first = { write: vi.fn(() => true) } as unknown as ServerResponse;
+    const second = { write: vi.fn(() => true) } as unknown as ServerResponse;
+    const removeFirst = hub.addClient(first);
+    hub.addClient(second);
+    first.write = vi.fn(() => true) as typeof first.write;
+    second.write = vi.fn(() => true) as typeof second.write;
+
+    expect(hub.broadcastOne({ type: "playback", id: "one" })).toBe(true);
+    expect(first.write).toHaveBeenCalledTimes(1);
+    expect(second.write).not.toHaveBeenCalled();
+
+    removeFirst();
+    expect(hub.broadcastOne({ type: "playback", id: "two" })).toBe(true);
+    expect(second.write).toHaveBeenCalledTimes(1);
   });
 });
 
