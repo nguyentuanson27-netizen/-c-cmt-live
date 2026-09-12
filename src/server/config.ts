@@ -7,6 +7,16 @@ export type FacebookStartRequest = {
   liveVideoIdOrUrl: string;
 };
 
+export type TikTokServerConfig = {
+  apiKey: string;
+};
+
+export type TikTokStartRequest = {
+  creator: string;
+};
+
+const TIKTOK_SECRET_FIELDS = ["apiKey", "eulerApiKey", "token", "jwtKey", "session"] as const;
+
 export function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
   const unwrapped = normalized.startsWith("[") && normalized.endsWith("]")
@@ -32,6 +42,57 @@ export function loadFacebookServerConfig(
   }
 
   return { ok: true, config: { token, apiVersion } };
+}
+
+export function loadTikTokServerConfig(
+  env: NodeJS.ProcessEnv,
+): { ok: true; config: TikTokServerConfig } | { ok: false; error: string } {
+  const apiKey = env.EULER_API_KEY?.trim() ?? "";
+  if (!apiKey) {
+    return { ok: false, error: "EULER_API_KEY is not configured on the server" };
+  }
+  return { ok: true, config: { apiKey } };
+}
+
+function hasTikTokSecretField(record: Record<string, unknown>): boolean {
+  return TIKTOK_SECRET_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(record, field));
+}
+
+export function parseTikTokStartRequest(
+  value: unknown,
+): { ok: true; creator: string } | { ok: false; error: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const record = value as Record<string, unknown>;
+  if (hasTikTokSecretField(record)) {
+    return { ok: false, error: "Euler credentials must be configured on the server, not sent by the browser" };
+  }
+
+  const creator = typeof record.creator === "string" ? record.creator.trim() : "";
+  if (!creator || creator.length > 2048) {
+    return { ok: false, error: "creator must be a non-empty string up to 2048 characters" };
+  }
+  return { ok: true, creator };
+}
+
+export function parseTikTokStopRequest(
+  value: unknown,
+): { ok: true } | { ok: false; error: string } {
+  if (value === null || value === undefined) {
+    return { ok: true };
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+  const record = value as Record<string, unknown>;
+  if (hasTikTokSecretField(record)) {
+    return { ok: false, error: "Euler credentials must be configured on the server, not sent by the browser" };
+  }
+  if (Object.keys(record).length > 0) {
+    return { ok: false, error: "TikTok stop request must be an empty JSON object" };
+  }
+  return { ok: true };
 }
 
 export function parseFacebookStartRequest(

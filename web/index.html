@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Live Comment TTS — Facebook Graph</title>
+    <title>Live Comment TTS</title>
     <link rel="stylesheet" href="/app.css" />
   </head>
   <body>
     <main class="shell">
       <header>
         <p class="eyebrow">LOCAL WEB RUNTIME</p>
-        <h1>Facebook Live Comment TTS</h1>
-        <p class="lead">Theo dõi tối đa 9 Facebook Live qua Graph API → một queue → Edge TTS. Không đọc DOM Facebook và không lưu Page token trong trình duyệt.</p>
+        <h1>Live Comment TTS</h1>
+        <p class="lead">Facebook Graph 2–9 live + một TikTok LIVE qua Euler Stream → một queue → Edge TTS. Credential chỉ ở server; trình duyệt không đọc DOM Facebook/TikTok.</p>
       </header>
 
       <section class="card" aria-labelledby="connection-heading">
@@ -21,9 +21,9 @@
         <div class="actions">
           <button id="start" type="button">Thêm live</button>
           <button id="discover-lives" type="button" class="secondary">Tìm live đang phát</button>
-          <button id="stop-all" type="button" class="secondary">Dừng tất cả</button>
+          <button id="stop-all" type="button" class="secondary">Dừng tất cả Facebook</button>
         </div>
-        <p id="status" class="status" role="status" aria-live="polite">Đang kiểm tra cấu hình server…</p>
+        <p id="status" class="status" role="status" aria-live="polite">Đang kiểm tra cấu hình Facebook…</p>
         <div class="live-panel" aria-labelledby="discovered-lives-heading">
           <div class="section-row compact-row">
             <h3 id="discovered-lives-heading">Live tìm thấy</h3>
@@ -41,6 +41,18 @@
           <ul id="active-lives" class="live-list"></ul>
         </div>
         <p class="hint">Page Access Token và Graph API version được cấu hình ở server environment, không nhập tại đây.</p>
+      </section>
+
+      <section class="card" aria-labelledby="tiktok-heading">
+        <h2 id="tiktok-heading">Kết nối TikTok LIVE</h2>
+        <label for="tiktok-input">Creator username hoặc TikTok LIVE URL</label>
+        <input id="tiktok-input" type="text" autocomplete="off" placeholder="@creator hoặc https://www.tiktok.com/@creator/live" />
+        <div class="actions">
+          <button id="tiktok-start" type="button">Kết nối TikTok</button>
+          <button id="tiktok-stop" type="button" class="secondary" disabled>Dừng TikTok</button>
+        </div>
+        <p id="tiktok-status" class="status" role="status" aria-live="polite">Đang kiểm tra cấu hình TikTok…</p>
+        <p class="hint">Euler Stream API key chỉ được cấu hình ở server qua <code>EULER_API_KEY</code>; trình duyệt không nhận credential này.</p>
       </section>
 
       <section class="card" aria-labelledby="tts-heading">

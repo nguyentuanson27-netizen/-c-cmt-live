@@ -1,49 +1,69 @@
-# Plan — Facebook Page Live Discovery
+# Plan — TikTok LIVE ingestion via Euler Stream
 
-## Task 1 — Lock discovery contract
+## Task 1 — Provider boundary + parser
 
 **Acceptance criteria**
-- Define server-only Graph discovery, safe browser response shape, trusted-origin requirement, and manual operator selection.
-- Keep current token/version model, 9-live cap, polling, queue, TTS, and manual Live ID/URL flow unchanged.
-- Record that current Meta Page live-video discovery semantics require real runtime verification before merge-ready.
+- Parse creator username / `@username` / canonical TikTok LIVE URL without server-side user-controlled fetches.
+- Build only `wss://ws.eulerstream.com` URLs with server API key, explicit schema v2, decoded bundled events.
+- Parse bounded JSON bundles and extract only `WebcastChatMessage` records.
+- Normalize username/text/id defensively and redact provider secrets from errors.
 
 **Verification**
-- Spec is reviewed against current server security boundaries and deferred scope.
+- RED tests fail before module exists.
+- Focused parser/security tests pass after implementation.
 
-## Task 2 — TDD the Graph discovery client
+**Dependencies:** None
+
+## Task 2 — One-session lifecycle + reconnect
 
 **Acceptance criteria**
-- Add RED tests before implementation.
-- Request `/<configured-version>/me/live_videos` with `broadcast_status=LIVE`, bounded `limit`, and safe metadata fields.
-- Send Page token only through Authorization header.
-- Validate/bound returned metadata and handle malformed responses safely.
-- Surface code 190 as invalid/expired token without exposing secrets.
+- At most one active/pending TikTok session.
+- Start resolves on WebSocket open; conflict does not replace active session.
+- Manual stop is idempotent, clears reconnect timers, and invalidates stale callbacks.
+- Retry documented transient close classes at 1/2/4/8/16 seconds, max 5 attempts.
+- Terminal auth/offline/end closes do not retry.
 
 **Verification**
-- Focused tests fail because discovery implementation is absent, while existing tests remain green.
-- After implementation, focused discovery tests pass.
+- Fake-WebSocket lifecycle tests cover start, stop, stale callbacks, transient retry cap, terminal close.
 
-## Task 3 — Wire local HTTP and operator UI
+**Dependencies:** Task 1
+
+## Task 3 — Normalize into shared comment/TTS pipeline
 
 **Acceptance criteria**
-- Add trusted-origin `GET /api/facebook/live-videos`.
-- Return 503 for missing server config and 502 for Graph discovery failures.
-- Add **Tìm live đang phát** control and result list.
-- Result **Thêm** action reuses the existing `/api/facebook/start` path.
-- Render Graph metadata with text nodes only.
-- Empty/error discovery states are understandable; discovery does not mutate active lives.
+- TikTok comments use source `tiktok-euler:<uniqueId>` and `sourceLabel: TT-EULER`.
+- Dedup recent same-user/same-text comments for this one session.
+- Queue/TTS/playback remain shared with Facebook.
+- Stop TikTok removes only waiting TikTok queue items.
+- Facebook manager/session state is untouched by TikTok failures.
 
 **Verification**
-- Boundary/source tests cover route/UI security contract where practical.
-- `node --check web/app.js` remains green.
+- Processor tests and queue integration assertions pass.
 
-## Task 4 — Full verification and runtime gate
+**Dependencies:** Tasks 1–2
+
+## Task 4 — HTTP/SSE/UI slice
 
 **Acceptance criteria**
-- Typecheck, all tests, and build pass on Ubuntu + Windows.
-- Self-review finds no Required correctness/security/architecture issue.
-- Real managed Page with an active live proves discovery returns that live and operator can connect it.
-- Browser/network/SSE/log secret-leak check remains zero token occurrences.
+- Add `EULER_API_KEY` server config only.
+- Add trusted-origin `POST /api/tiktok/start` and `/api/tiktok/stop`.
+- Snapshot exposes configured/active/connecting creator state, never secret.
+- UI has TikTok creator field, start/stop controls, safe status rendering, and source-aware recent comments.
+- Existing Facebook discovery/multi-live UI remains functional.
+
+**Verification**
+- Boundary/source tests prove route/UI wiring and no `innerHTML`.
+- `node --check web/app.js` passes.
+
+**Dependencies:** Tasks 1–3
+
+## Task 5 — Full verify + self-review + runtime gate
+
+**Acceptance criteria**
+- `npm ci`, typecheck, all tests, build pass on Ubuntu + Windows.
+- Review correctness → security → architecture → simplicity → performance.
+- No Critical/Required findings remain.
+- Real TikTok LIVE with actual Euler key proves connect, comment, TTS, stop isolation, and zero key leak.
 
 **Verification**
 ```bash
@@ -53,4 +73,4 @@ npm test
 npm run build
 ```
 
-Keep PR #7 Draft until real Meta runtime evidence is recorded in `tasks/capture-findings.md`.
+Keep PR #8 Draft until runtime evidence is recorded in `tasks/capture-findings.md`.
