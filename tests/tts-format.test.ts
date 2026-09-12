@@ -25,7 +25,6 @@ describe("TTS text formatting", () => {
       id: "c-graph",
       platform: "facebook",
       sourceId: "facebook-graph:live-1",
-      sourceLabel: "FB-API",
       username: "Facebook viewer",
       text: "chốt size M",
       receivedAt: Date.now(),
