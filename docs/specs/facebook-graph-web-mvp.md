@@ -50,6 +50,8 @@ if (!liveVideoId) {
 ## Testing strategy
 
 - Unit tests for Live Video ID extraction, auth header construction, baseline, pagination and lifecycle races.
+- Unit coverage for Graph TTS formatting: `FB-API` speech is exactly the comment content, without username/fallback prefix.
+- Regression coverage ensures unattributed Facebook comments are not collapsed by content-based dedup.
 - Existing core/TTS tests remain green.
 - CI runs typecheck, full tests and build on Ubuntu + Windows.
 - Runtime verification with a real managed Page live remains mandatory before merge-ready status.
@@ -61,7 +63,8 @@ if (!liveVideoId) {
 - Bind the development server to `127.0.0.1` by default.
 - Validate JSON body size/type and Facebook Live identifiers.
 - Poll comments with bounded pagination and discard stale async work after stop/restart.
-- Scope deduplication by live source.
+- Scope deduplication by live source; do not content-deduplicate comments that all share the fallback `Facebook viewer` identity.
+- For `FB-API`, synthesize only the normalized comment text. Do not speak viewer username or the `Facebook viewer` fallback.
 
 ### Ask first
 - Public internet deployment or non-loopback binding.
@@ -82,9 +85,10 @@ if (!liveVideoId) {
 4. New comments are polled with bounded pagination so bursts larger than one page are not silently lost.
 5. Stop/restart cannot let an old in-flight poll emit into the new session.
 6. Accepted comments flow through normalization, source-scoped dedup, bounded FIFO and sequential Edge TTS.
-7. Audio is played in the browser and completion advances the server-side queue.
-8. Typecheck/tests/build pass on Windows and Ubuntu CI.
-9. A real Page live runtime check records username/text and observed comment latency before merge-ready.
+7. `FB-API` audio contains only comment text, never username or the `Facebook viewer` fallback.
+8. Audio is played in the browser and completion advances the server-side queue.
+9. Typecheck/tests/build pass on Windows and Ubuntu CI.
+10. A real Page live runtime check records exact external-viewer comment text and observed comment latency before merge-ready; viewer username is not required.
 
 ## Open questions
 
