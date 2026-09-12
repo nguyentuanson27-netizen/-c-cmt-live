@@ -41,14 +41,14 @@
 - [x] Self-review completed: one Required idempotent-stop finding fixed; no remaining Required code findings.
 
 ## Runtime verification — merge gate
-- [ ] Two real Facebook Lives connected simultaneously.
-- [ ] Both lives baseline existing comments independently.
-- [ ] Marker comment from Live A reaches UI/shared queue/TTS.
-- [ ] Marker comment from Live B reaches UI/shared queue/TTS.
-- [ ] Shared TTS is sequential and speaks comment content only.
-- [ ] Stop Live A leaves Live B active and still receiving comments.
-- [ ] Page token absent from browser storage/URLs/SSE/logs.
-- [ ] Record Graph→app latency for both sources in `tasks/capture-findings.md`; no PR #5 multi-live runtime evidence has been recorded yet.
+- [x] Two real Facebook Lives connected simultaneously.
+- [x] Both lives baseline existing comments independently.
+- [x] Marker comment from Live A reaches UI/shared queue/TTS.
+- [x] Marker comment from Live B reaches UI/shared queue/TTS.
+- [x] Shared TTS is sequential and speaks comment content only.
+- [x] Stop Live A leaves Live B active and still receiving comments.
+- [x] Page token absent from browser storage/URLs/SSE/logs.
+- [x] Record Graph→app latency for both sources in `tasks/capture-findings.md` (Live A: 2422 ms, Live B: 2227 ms).
 
 ## Deferred
 - [ ] More than 9 concurrent Facebook Lives.
