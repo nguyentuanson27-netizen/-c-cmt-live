@@ -25,7 +25,7 @@ Task 5 Two-live real runtime verification
 - [x] Concurrent starts cannot race past the cap.
 - [x] Failed baseline/start does not consume a slot or affect other lives.
 - [x] Token-expiry/error in one poller removes only that live from manager state.
-- [x] Stop one and stop-all are isolated and idempotent at the HTTP behavior boundary.
+- [x] Stop one and stop-all are isolated; repeated stop-one is a successful no-op at the HTTP boundary.
 
 **Verification:** focused manager tests written RED first, then full suite.
 
@@ -75,4 +75,4 @@ Task 5 Two-live real runtime verification
 - [ ] Page token remains absent from browser storage/URLs/SSE/logs.
 - [ ] Observed Graph→app latency for both live sources is recorded.
 
-**Verification:** runtime evidence recorded in `tasks/capture-findings.md` before merge-ready.
+**Verification:** runtime evidence recorded in `tasks/capture-findings.md` before the PR can leave Draft.
