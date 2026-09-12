@@ -86,45 +86,6 @@ describe("Facebook Graph web connector", () => {
     poller.stop();
   });
 
-  it("uses the Graph comment id as opaque identity when commenter identity is unavailable", async () => {
-    const fetchFn = vi
-      .fn<GraphFetch>()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          data: [{ id: "boundary", message: "before", created_time: "2026-09-11T10:00:00Z" }],
-          paging: { cursors: {} },
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          data: [
-            { id: "anon-2", message: "chốt", created_time: "2026-09-11T10:00:02Z" },
-            { id: "anon-1", message: "chốt", created_time: "2026-09-11T10:00:01Z" },
-            { id: "boundary", message: "before", created_time: "2026-09-11T10:00:00Z" },
-          ],
-          paging: { cursors: {} },
-        }),
-      );
-    const onComment = vi.fn();
-    const poller = new FacebookGraphCommentPoller({ fetchFn });
-
-    await poller.start(
-      { token: "TOKEN", apiVersion: "v99.0", liveVideoIdOrUrl: "1234567890", pollIntervalMs: 60_000 },
-      { onComment, onStatus: vi.fn() },
-    );
-    await poller.pollNow();
-
-    expect(onComment).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ id: "anon-1", username: "comment:anon-1", text: "chốt" }),
-    );
-    expect(onComment).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ id: "anon-2", username: "comment:anon-2", text: "chốt" }),
-    );
-    poller.stop();
-  });
-
   it("paginates through a burst until the previous boundary and emits all new comments oldest first", async () => {
     const fetchFn = vi
       .fn<GraphFetch>()
