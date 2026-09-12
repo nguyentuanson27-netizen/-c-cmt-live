@@ -21,6 +21,14 @@ describe('comment deduplication', () => {
     expect(dedup.isDuplicate('Bob', 'giá bao nhiêu', now)).toBe(false);
   });
 
+  it('does not deduplicate comments when Facebook commenter identity is unavailable', () => {
+    const dedup = new CommentDedup({ windowMs: 10000 });
+    const now = 100000;
+
+    dedup.record('Facebook viewer', 'chốt', now);
+    expect(dedup.isDuplicate('Facebook viewer', 'chốt', now + 1000)).toBe(false);
+  });
+
   it('allows same user to send different comments', () => {
     const dedup = new CommentDedup();
     const now = 100000;
