@@ -2,7 +2,7 @@
 
 Local web operator app that reads **managed Facebook Page Live comments** with Vietnamese Edge TTS.
 
-The active direction is **Facebook Graph API + Node web server**, not Facebook DOM scraping/Electron. The previous Electron implementation remains in the repository temporarily as historical/rollback code.
+The repository has one active runtime: **Facebook Graph API + local Node.js web server**. The legacy Electron/browser-DOM capture implementation has been removed; git history and ADR 0001 retain the historical rationale.
 
 ## Current architecture
 
@@ -74,7 +74,7 @@ npm run build
 npm run dev
 ```
 
-CI uses Node.js 24 and runs install + typecheck + tests + build on Ubuntu and Windows. The build also syntax-checks the plain browser runtime with `node --check web/app.js`.
+CI uses Node.js 24 and runs install + typecheck + tests + build on Ubuntu and Windows. The build syntax-checks the plain browser runtime with `node --check web/app.js`.
 
 ## Facebook multi-live behavior
 
@@ -93,18 +93,11 @@ The web runtime supports up to **9 active or connecting Facebook Lives**:
 
 A comment already being synthesized or played may finish when its individual live is stopped. Waiting comments from that source are removed.
 
-## Runtime merge gate
+## Verified runtime baseline
 
-Automated tests are not enough for multi-live Meta integration. **The multi-live PR must remain Draft until this runtime gate is recorded.** A real session must prove:
-- two real Facebook Lives are connected at the same time;
-- both baseline existing comments independently;
-- a marker comment from each live reaches the UI/shared queue/TTS;
-- shared TTS remains sequential and speaks exact comment content only;
-- stopping Live A leaves Live B active and still receiving comments;
-- observed Graph→app latency is recorded for both sources;
-- browser storage/network URLs/SSE/log output contain no Page token.
+The merged multi-live implementation was verified with two real Facebook Lives feeding the same sequential TTS queue. Evidence includes independent baselines, comments from both lives, cross-live dedup isolation, stop-one isolation, playback-owner handover, observed latency and a browser/server secret-leak check.
 
-Record evidence in `tasks/capture-findings.md`.
+The detailed record is in `tasks/capture-findings.md`. Future changes to Graph ingestion, concurrency, queueing, playback ownership or token handling should re-run the relevant runtime gate instead of relying only on unit tests.
 
 ## Deferred
 
@@ -113,13 +106,14 @@ Record evidence in `tasks/capture-findings.md`.
 - per-live voices/queues
 - public deployment/authentication/webhooks
 - TikTok/Shopee web ingestion strategy
-- removal of legacy Electron Facebook code in a focused cleanup
 
 ## Docs
 
-- `docs/specs/facebook-graph-web-mvp.md` — original single-live Graph contract
-- `docs/specs/facebook-graph-multi-live.md` — 2→9 live contract
-- `docs/adr/0002-web-graph-api-runtime.md` — architecture decision
-- `tasks/plan.md` — implementation plan
-- `tasks/todo.md` — execution status
+- `docs/specs/facebook-graph-web-mvp.md` — single-live Graph foundation
+- `docs/specs/facebook-graph-multi-live.md` — current 2→9 live contract
+- `docs/specs/remove-legacy-electron.md` — focused Electron-removal contract
+- `docs/adr/0001-electron-local-browser-capture.md` — superseded historical decision
+- `docs/adr/0002-web-graph-api-runtime.md` — current architecture decision
+- `tasks/plan.md` — current implementation plan
+- `tasks/todo.md` — current execution status
 - `tasks/capture-findings.md` — runtime evidence
