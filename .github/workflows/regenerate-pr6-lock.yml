@@ -1,0 +1,51 @@
+name: Regenerate PR6 lockfile
+
+on:
+  push:
+    branches:
+      - chore/remove-legacy-electron
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-lockfile:
+    if: github.repository == 'nguyentuanson27-netizen/-c-cmt-live'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: chore/remove-legacy-electron
+          persist-credentials: true
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Regenerate lockfile without install scripts
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Verify Electron is absent from lockfile
+        shell: bash
+        run: |
+          if grep -qi electron package-lock.json; then
+            echo "Electron still present in package-lock.json"
+            exit 1
+          fi
+
+      - name: Commit regenerated lockfile
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo "Lockfile already current"
+            exit 0
+          fi
+          git commit -m "chore: regenerate lockfile without Electron"
+          git push origin HEAD:chore/remove-legacy-electron
