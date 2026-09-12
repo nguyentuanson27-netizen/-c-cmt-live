@@ -2,77 +2,42 @@
 
 ## Objective
 
-Add TikTok LIVE comment ingestion to the existing local Node.js/web operator runtime without reintroducing Electron or browser DOM capture. TikTok comments should normalize into the existing `Comment` model and share the current bounded FIFO/TTS/playback pipeline with Facebook.
+Add one TikTok LIVE comment session to the existing local Node.js/web operator runtime without reintroducing Electron or browser DOM capture. TikTok comments normalize into the existing `Comment` model and share the current bounded FIFO/TTS/playback pipeline with Facebook.
 
-This PR must not silently depend on an undocumented TikTok transport. The ingestion source is an explicit architecture/security decision because TikTok's public developer products currently do not expose a documented real-time LIVE-comment API.
+## Approved source decision
 
-## Assumptions pending confirmation
+**A — Euler Stream managed WebSocket API** is approved for PR #8.
 
-1. PR #8 MVP supports **one TikTok LIVE session at a time**. Facebook's existing 2–9 session behavior remains unchanged.
-2. Operator starts TikTok manually with a creator `@username` or TikTok LIVE URL; no TikTok live discovery in this PR.
-3. TikTok comments use the existing non-Facebook TTS format: `username: comment`.
+Current provider contract checked on 2026-09-12:
+- connect server-side to fixed host `wss://ws.eulerstream.com`;
+- authenticate with `EULER_API_KEY` in the WebSocket query string required by the provider;
+- identify the stream with TikTok creator `uniqueId`;
+- request decoded bundled events (`features.bundleEvents=true`, `features.rawMessages=false`);
+- explicitly pin `schemaVersion=v2` to avoid relying on changing provider defaults;
+- common chat events are delivered as `WebcastChatMessage` records inside a message bundle.
+
+Euler's current WebSocket SDK is MIT-licensed and documents v2 as the default schema. PR #8 does not need the SDK at runtime: Node.js 24 has a stable built-in WHATWG `WebSocket`, and the provider's decoded/bundled mode exposes JSON messages. Avoiding an SDK dependency keeps the integration narrow and avoids ESM/CJS churn in the existing CommonJS build.
+
+This remains a third-party provider integration, not a first-party TikTok developer API.
+
+## MVP contract
+
+1. Support **one TikTok LIVE session at a time** while Facebook's existing 2–9 sessions remain unchanged.
+2. Operator starts TikTok manually with a creator username, `@username`, or canonical TikTok LIVE URL.
+3. TikTok comments use existing non-Facebook TTS behavior: `username: comment`.
 4. TikTok comments share the existing bounded FIFO, TTS service, SSE playback-owner browser, pause/resume controls, and recent-comment UI.
-5. Gifts, follows, likes, viewer counts, moderation, chat sending, TikTok login/session cookies, and Shopee remain out of scope.
-
-## Source research — 2026-09-12
-
-### Official TikTok developer surface
-
-Reviewed current TikTok for Developers documentation:
-
-- Product catalog: https://developers.tiktok.com/docs/en/welcome
-- Scope reference: https://developers.tiktok.com/docs/en/tiktok-api-scopes
-- Research video comments: https://developers.tiktok.com/docs/en/research-api-specs-query-video-comments
-- Research API FAQ: https://developers.tiktok.com/docs/en/research-api-faq
-
-Findings:
-
-- The public product/scope catalog does not expose a LIVE-comment streaming scope/API.
-- The documented comment API is Research API `POST /v2/research/video/comment/list/`, which is for video comments, requires approved research access, and is not a real-time TikTok LIVE chat stream.
-- Research API data is not suitable as a low-latency live-comment transport.
-
-Therefore an official first-party real-time TikTok LIVE comment source was **not found** in the current public TikTok developer docs.
-
-### Unofficial direct connector candidate
-
-`tiktok-live-connector` 2.4.4 is a current Node.js package that consumes TikTok's internal Webcast transport.
-
-Important constraints from its current package/docs:
-
-- explicitly unofficial / reverse-engineered;
-- package license is `AGPL-3.0-only`;
-- current package is ESM-only;
-- uses Euler Stream for WebSocket signing/provider routes;
-- default room-ID resolution can fall back to scraping TikTok HTML;
-- authenticated modes can forward TikTok session credentials to a third-party sign service;
-- upstream README itself says it is not a production-ready API.
-
-Directly adopting this dependency would therefore introduce license, supply-chain, scraping-policy, vendor, and protocol-breakage concerns. It is **not approved by this spec by default**.
-
-### Managed WebSocket provider candidate
-
-Euler Stream publishes a TikTok LIVE WebSocket API (`wss://ws.eulerstream.com`) that streams live events by creator `uniqueId` using an API key. Their current public pricing includes a free/community tier and cloud WebSocket allowance.
-
-This path avoids embedding the AGPL connector and avoids our application doing TikTok HTML/DOM scraping, but introduces a third-party service/API key and vendor dependency. It is also not a TikTok first-party API.
-
-## Decision gate
-
-Before production connector code is written, the product owner must choose one of:
-
-- **A — Managed provider:** use Euler Stream WebSocket API server-side. Recommended for the current architecture because it avoids DOM/HTML scraping in this repository and avoids the AGPL connector dependency, while keeping the provider API key server-side.
-- **B — Unofficial direct connector:** use `tiktok-live-connector` despite the constraints above. Requires explicit acceptance of AGPL/reverse-engineered transport and a design that disables authenticated-session forwarding and avoids scrape fallbacks where possible.
-- **C — Official-only:** do not implement realtime TikTok ingestion until TikTok exposes/approves a suitable first-party API for this use case.
-
-No implementation may pretend Research API video comments are TikTok LIVE chat.
+5. Gifts, follows, likes, viewer counts, moderation, chat sending, TikTok login/session cookies, discovery, multi-TikTok, and Shopee are out of scope.
+6. Stop TikTok independently; waiting TikTok queue items are removed while Facebook sessions stay active.
+7. Retry only provider-documented transient closes with bounded exponential backoff; terminal auth/offline/end errors do not loop forever.
 
 ## Tech Stack
 
 - Node.js 24 in CI/runtime
 - TypeScript 7
+- built-in Node.js `WebSocket`
 - local HTTP/SSE web app
 - existing `CommentQueue`, `TTSService`, `PlaybackManager`, and browser playback bridge
-- no new frontend framework
-- ingestion transport: **pending decision gate**
+- no new runtime dependency for TikTok ingestion
 
 ## Commands
 
@@ -86,24 +51,56 @@ npm run dev
 
 ## Project Structure
 
-Expected ownership after source selection:
-
 ```text
-src/server/tiktok-*.ts       TikTok transport/session adapter and normalization
-src/server/main.ts           HTTP/SSE orchestration only
-tests/tiktok-*.test.ts       transport-adapter and normalization tests
-web/index.html               operator controls
-web/app.js                   start/stop/status UI using textContent only
-docs/specs/                  source-of-truth contract
-tasks/                       plan / execution state / runtime evidence
+src/server/tiktok-euler.ts             provider transport + lifecycle
+src/server/tiktok-comment-processor.ts provider-event normalization/dedup
+src/server/config.ts                   TikTok env/input parsing
+src/server/main.ts                     HTTP/SSE orchestration only
+tests/tiktok-*.test.ts                 transport/parser/lifecycle regressions
+web/index.html                         operator controls
+web/app.js                             start/stop/status UI via textContent
+docs/specs/                            source-of-truth contract
+tasks/                                 plan / execution state / runtime evidence
 ```
 
-## Code Style
+Provider-specific envelope decoding must stay out of `src/server/main.ts`.
 
-Keep provider-specific policy behind a narrow adapter and emit normalized comments into the existing core pipeline.
+## API contract
+
+### Server environment
+
+```text
+EULER_API_KEY=<Euler Stream API key>
+```
+
+The browser must never receive this key.
+
+### `POST /api/tiktok/start`
+
+Request:
+
+```json
+{ "creator": "@creator" }
+```
+
+Accept username, `@username`, or canonical `https://www.tiktok.com/@username/live` URL. Reject arbitrary hosts/paths and client-supplied credentials.
+
+### `POST /api/tiktok/stop`
+
+Request body is `{}`. Repeated stop is a successful no-op.
+
+### State/SSE
+
+Snapshot/state includes TikTok configured/active/connecting creator state without secrets. TikTok status/comment events are source-labelled and coexist with Facebook events.
+
+## Provider event normalization
+
+Only bounded `WebcastChatMessage` events are eligible for TTS. Treat every provider payload as untrusted.
+
+Normalized provider comment shape:
 
 ```ts
-export type TikTokLiveComment = {
+export type TikTokEulerComment = {
   id: string;
   username: string;
   text: string;
@@ -111,65 +108,76 @@ export type TikTokLiveComment = {
 };
 ```
 
-`src/server/main.ts` should not decode provider-specific event envelopes directly.
+Support provider schema variation defensively:
+- comment text: `data.comment` or `data.content`;
+- username: `data.user.uniqueId`, `data.user.displayId`, then `data.user.nickname`;
+- stable message id: provider/common message id when present; otherwise a bounded fallback id.
 
-## Testing Strategy
+Drop malformed/non-chat/empty events. Cap a received bundle before iterating it.
 
-- RED → GREEN unit tests for creator-input parsing, provider event validation, comment normalization, dedup/source identity, connect/stop lifecycle, stale-event isolation, and sanitized errors.
-- Boundary tests for HTTP routes/UI wiring and safe rendering.
-- Existing Facebook multi-live, queue, TTS, playback and security tests remain green.
-- Full Ubuntu + Windows CI must pass.
-- Real TikTok LIVE runtime verification is a merge gate for the chosen transport.
+## Lifecycle / reconnect policy
+
+- One active or pending TikTok creator only.
+- Starting while another TikTok session is active/pending returns conflict and does not affect Facebook.
+- Manual stop invalidates stale callbacks and cancels scheduled reconnects.
+- Retryable provider closes: internal/upstream/idle/max-lifetime/TikTok-disconnect classes only.
+- Terminal closes: normal manual close, stream ended, invalid options/auth/permission, creator offline.
+- Maximum 5 reconnect attempts using bounded exponential delay (1s, 2s, 4s, 8s, 16s).
+- Never log or surface the provider WebSocket URL because it contains `apiKey`.
 
 ## Security / trust boundaries
 
 Assets:
-- provider API keys or other server credentials;
+- `EULER_API_KEY` server secret;
 - TikTok comment/user data;
 - local playback/control authority;
-- availability of the shared TTS queue.
+- shared TTS queue availability.
 
 Always:
 - keep provider credentials server-side;
-- bound/validate every external event before enqueue/SSE;
-- use fixed provider/TikTok hosts rather than user-controlled server fetch URLs;
+- fixed outbound host `ws.eulerstream.com` only;
+- validate/bound external event fields before queue/SSE;
 - render external strings with `textContent` only;
-- cap reconnect/backoff/resource use;
-- make stop invalidate stale callbacks;
-- keep TikTok failure isolated from active Facebook sessions.
+- redact API key before bounding external error text;
+- isolate TikTok failure from Facebook sessions;
+- cap reconnects and received bundle size.
 
 Ask first:
-- adding TikTok session cookies/OAuth tokens;
-- forwarding credentials to a third party;
-- adding an AGPL dependency;
+- TikTok session cookies/OAuth tokens;
+- another third-party credential type;
 - public/LAN hosting;
 - auto-connect/discovery;
 - multiple simultaneous TikTok sessions.
 
 Never:
-- browser DOM scraping;
+- DOM/HTML scraping in this app;
 - Electron reintroduction;
 - client-side provider secrets;
-- logging credentials/session cookies;
-- unbounded reconnect loops or event buffers;
-- treating third-party/unofficial output as trusted.
+- credential/session logging;
+- user-controlled WebSocket host;
+- unbounded reconnect/event buffers.
+
+## Testing Strategy
+
+- RED → GREEN unit tests for creator parsing, fixed provider URL/auth, bundle validation, normalization, dedup/source identity, error redaction, connect/stop lifecycle, reconnect cap, and stale-event isolation.
+- Boundary tests for HTTP routes/UI wiring and safe rendering.
+- Existing Facebook multi-live, queue, TTS, playback, and security tests remain green.
+- Full Ubuntu + Windows CI must pass.
+- Real TikTok LIVE runtime verification is a merge gate.
 
 ## Success Criteria
 
-After the source decision is approved:
-
 1. Operator can start one TikTok LIVE by creator username/URL and stop it independently of Facebook sessions.
-2. Existing comments present before connection are not replayed as new speech when the selected transport exposes initial history.
-3. New TikTok chat comments normalize to `platform: "tiktok"` with stable source identity and enter the shared bounded FIFO.
-4. TikTok TTS reads `username: comment` unless the product decision changes this assumption before implementation.
-5. Duplicate/stale provider events cannot create repeated speech beyond the existing dedup contract.
-6. Disconnect/reconnect failures do not stop Facebook sessions or corrupt the shared queue.
-7. Provider errors are bounded/sanitized and contain no credentials.
-8. Browser/SSE/storage/logs contain zero provider-secret occurrences.
-9. Automated tests, typecheck and build pass on Ubuntu + Windows.
-10. Real TikTok LIVE runtime evidence proves comment ingestion, stop isolation, TTS, and secret-leak checks for the chosen transport before merge-ready status.
+2. New TikTok chat comments normalize to `platform: "tiktok"`, source `tiktok-euler:<uniqueId>`, and enter the shared bounded FIFO.
+3. TikTok TTS reads `username: comment`.
+4. Duplicate/stale provider events cannot create repeated speech beyond the existing dedup contract.
+5. Transient disconnects retry with the bounded policy; terminal failures stop retrying and do not disturb Facebook.
+6. Waiting TikTok comments are removed on TikTok stop; a currently-playing item may finish consistently with Facebook stop semantics.
+7. Provider errors are bounded/sanitized and contain no API key.
+8. Browser API/SSE/storage and server logs contain zero provider-secret occurrences.
+9. Automated tests, typecheck, and build pass on Ubuntu + Windows.
+10. Real TikTok LIVE runtime evidence proves connect → new comment → TTS → stop isolation → reconnect/terminal behavior where practical → zero secret leaks before merge-ready.
 
-## Open Questions
+## Runtime gate
 
-- Which source option (A/B/C) is approved?
-- Confirm MVP assumptions 1–5 above, especially one TikTok session and `username: comment` TTS.
+PR #8 remains Draft until a real TikTok LIVE is tested with an actual Euler Stream API key and evidence is recorded in `tasks/capture-findings.md`. CI/mocks do not substitute for this provider integration gate.
