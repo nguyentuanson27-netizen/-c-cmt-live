@@ -95,7 +95,7 @@ A comment already being synthesized or played may finish when its individual liv
 
 ## Runtime merge gate
 
-Automated tests are not enough for multi-live Meta integration. **The multi-live implementation is not merge-ready until this runtime gate is recorded.** A real session must prove:
+Automated tests are not enough for multi-live Meta integration. **The multi-live PR must remain Draft until this runtime gate is recorded.** A real session must prove:
 - two real Facebook Lives are connected at the same time;
 - both baseline existing comments independently;
 - a marker comment from each live reaches the UI/shared queue/TTS;
