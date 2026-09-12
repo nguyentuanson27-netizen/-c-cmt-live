@@ -12,21 +12,23 @@
 ## Task 2 — Remove Electron dependency and runtime artifacts
 
 **Acceptance criteria**
-- Remove Electron entrypoint, BrowserWindow/source-window/UI preload/renderer, IPC/platform URL helpers, platform selector, DOM preloads and Electron-only public assets.
-- Remove Electron-only tests.
-- Remove `pretest` Electron require and Electron dev dependency.
-- Regenerate/prune lockfile without Electron packages.
+- Remove Electron entrypoint, BrowserWindow/source-window/UI preload/renderer, IPC/platform-URL helpers and DOM preloads.
+- Keep the shared `Platform` domain type used by active core code, but remove its Electron-only runtime helpers.
+- Remove Electron-only public assets and tests.
+- Remove `pretest`, Electron dev dependency and the Electron-only runtime-module build guard.
+- Regenerate/prune the lockfile so Electron packages are absent.
 
 **Verification**
 - Repository-structure guard GREEN.
-- `npm ci` completes without Electron download.
+- `npm ci` completes without an Electron download.
 
 ## Task 3 — Align docs/source of truth
 
 **Acceptance criteria**
-- `README.md` no longer says legacy Electron remains.
-- `AGENTS.md` describes current Graph web runtime and current commands/security boundaries.
-- ADR 0001 is explicitly superseded; ADR 0002 is accepted/current and no longer says cleanup is pending.
+- `README.md` describes the web runtime as the sole active runtime.
+- `AGENTS.md` describes current Graph web commands/security boundaries and treats TikTok/Shopee web ingestion as deferred.
+- ADR 0001 is explicitly superseded; ADR 0002 is accepted/current.
+- Single-live and multi-live specs record their completed migration/runtime gates instead of stale draft/deferred language.
 - Remove obsolete Electron feasibility runbook and original Electron MVP spec.
 
 **Verification**
