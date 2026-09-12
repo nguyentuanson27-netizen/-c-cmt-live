@@ -37,6 +37,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be an integer between 1 and 65535");
 }
 
+const FACEBOOK_UNKNOWN_VIEWER = "Facebook viewer";
 const webRoot = resolve(__dirname, "../../web");
 const hub = new SseHub();
 const graphPoller = new FacebookGraphCommentPoller();
@@ -112,12 +113,15 @@ function handleGraphComment(graphComment: FacebookGraphComment): void {
     return;
   }
 
-  // Only one Graph live is active in this slice. Clearing this dedup state on every
-  // successful start scopes it to the current live without changing shared core APIs yet.
-  if (commentDedup.isDuplicate(normalized.username, normalized.text)) {
-    return;
+  // Meta can omit commenter identity, causing unrelated viewers to share the fallback
+  // label. Keep that source-specific exception here instead of changing shared dedup rules.
+  const hasReliableViewerIdentity = normalized.username.toLowerCase() !== FACEBOOK_UNKNOWN_VIEWER.toLowerCase();
+  if (hasReliableViewerIdentity) {
+    if (commentDedup.isDuplicate(normalized.username, normalized.text)) {
+      return;
+    }
+    commentDedup.record(normalized.username, normalized.text);
   }
-  commentDedup.record(normalized.username, normalized.text);
 
   const receivedAt = Date.now();
   const item: Comment = {
