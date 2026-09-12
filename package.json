@@ -6,17 +6,14 @@
   "main": "dist/server/main.js",
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build": "npm run clean && tsc -p tsconfig.json && npm run check:web && npm run check:runtime-modules",
+    "build": "npm run clean && tsc -p tsconfig.json && npm run check:web",
     "check:web": "node --check web/app.js",
-    "check:runtime-modules": "node scripts/check-runtime-modules.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "npm run build && node dist/server/main.js",
-    "pretest": "node -e \"require('electron')\"",
     "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
-    "electron": "44.2.0",
     "typescript": "7.0.2",
     "vitest": "5.0.0"
   },

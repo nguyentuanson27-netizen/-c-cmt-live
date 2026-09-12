@@ -1,59 +1,40 @@
-# Facebook Graph Multi-Live Todo
+# Todo — Remove legacy Electron runtime
 
 ## Define / plan
-- [x] Single-live Graph web runtime merged to `main` at `c62ed6841ab951473f96ccb86ec0570c67a0592a`.
-- [x] Confirm next phase is 2→9 concurrent Facebook Lives.
-- [x] Keep one shared FIFO/TTS pipeline; FB-API speech remains comment content only.
-- [x] Keep Page token and Graph version server-side only.
-- [x] Record multi-live spec and implementation plan.
+- [x] Confirm Graph web multi-live replacement is merged and runtime-proven.
+- [x] Define removal scope: Electron-only harness code/assets/tests/dependency; TikTok/Shopee web ingestion remains deferred.
+- [x] Write cleanup spec and plan.
 
-## Task 1 — Multi-live lifecycle manager
-- [x] RED tests for 2+ independent live sessions.
-- [x] RED test for duplicate start isolation.
-- [x] RED test for 9-live active+pending cap and concurrent-start race.
-- [x] RED test that one live error/stop does not terminate another.
-- [x] Regression coverage ensures inactive/error sessions leave manager state before status forwarding.
-- [x] Implement `FacebookLiveManager` and make focused tests GREEN.
+## TDD removal gate
+- [x] Add repository-structure regression test for Electron dependency/runtime artifacts.
+- [x] Confirm RED in CI: 75 existing tests passed and only the 2 new removal assertions failed while Electron/pretest/legacy entrypoint still existed.
 
-## Task 2 — Queue/source isolation
-- [x] Preserve distinct `facebook-graph:<liveVideoId>` source IDs.
-- [x] Scope content dedup per live.
-- [x] Add generic selective queue removal with tests.
-- [x] Stop one live removes only its waiting queue items; adding a live does not clear the queue.
-- [x] Repeated stop-one is a safe no-op and does not affect other lives.
-- [x] Stop-all clears all waiting queue items.
+## Remove legacy runtime
+- [x] Remove Electron entrypoint, BrowserWindow/source-window/UI preload/renderer, IPC and platform-URL runtime helpers.
+- [x] Keep `src/platform.ts` only as the shared `Platform` type still used by active core code.
+- [x] Remove Facebook/TikTok/Shopee Electron DOM preloads.
+- [x] Remove Electron-only public assets and tests.
+- [x] Remove Electron dev dependency, Electron `pretest`, and obsolete runtime-module guard.
+- [x] Regenerate `package-lock.json`; Electron and `@electron` packages are absent.
+- [x] Remove the temporary lockfile-regeneration workflow; final workflows contain only read-only CI.
 
-## Task 3 — HTTP/SSE/UI
-- [x] Start endpoint adds a live without replacing existing lives.
-- [x] Stop endpoint can stop one live or all lives.
-- [x] Status/SSE expose active live IDs/count without secrets.
-- [x] UI lists active live IDs with individual Stop buttons and Stop all.
-- [x] Status/comment events identify source live.
-- [x] Recent/current UI uses comment content and Live ID rather than viewer-name dependence.
-- [x] Existing pause/resume/clear queue and single-browser playback ownership remain intact.
+## Docs
+- [x] Update README and AGENTS to current web-only runtime truth.
+- [x] Mark ADR 0001 superseded and ADR 0002 accepted/current.
+- [x] Align single-live/multi-live specs with completed migration/runtime evidence.
+- [x] Remove obsolete Electron MVP spec and feasibility runbook.
 
-## Automated verification
-- [x] `npm run typecheck` PASS on implementation head.
-- [x] `npm test` PASS: 75/75 on implementation head.
-- [x] `npm run build` PASS, including `node --check web/app.js` and runtime-module guard.
-- [x] Ubuntu CI PASS on implementation head.
-- [x] Windows CI PASS on implementation head.
-- [x] Self-review completed: one Required idempotent-stop finding fixed; no remaining Required code findings.
+## Verification
+- [x] Removal guard GREEN.
+- [x] `npm ci` PASS without Electron download on Ubuntu and Windows; 80 packages installed / 81 audited, 0 vulnerabilities.
+- [x] `npm run typecheck` PASS.
+- [x] `npm test` PASS: 11 active test files / 50 tests.
+- [x] `npm run build` PASS, including `node --check web/app.js`.
+- [x] Ubuntu CI PASS on cleanup code head `b7d19b0051e7a09b1406cd27f50e16fe078f1534`.
+- [x] Windows CI PASS on cleanup code head `b7d19b0051e7a09b1406cd27f50e16fe078f1534`.
+- [x] Self-review: no Required findings across correctness, security, architecture, simplicity or performance.
+- [x] Final exact-head CI PASS after the documentation-only closeout commit.
 
-## Runtime verification — merge gate
-- [x] Two real Facebook Lives connected simultaneously.
-- [x] Both lives baseline existing comments independently.
-- [x] Marker comment from Live A reaches UI/shared queue/TTS.
-- [x] Marker comment from Live B reaches UI/shared queue/TTS.
-- [x] Shared TTS is sequential and speaks comment content only.
-- [x] Stop Live A leaves Live B active and still receiving comments.
-- [x] Page token absent from browser storage/URLs/SSE/logs.
-- [x] Record Graph→app latency for both sources in `tasks/capture-findings.md` (Live A: 2422 ms, Live B: 2227 ms).
+## Runtime note
 
-## Deferred
-- [ ] More than 9 concurrent Facebook Lives.
-- [ ] Auto-discovery of Page live videos.
-- [ ] Per-live voices/queues.
-- [ ] Public hosting/authentication/webhooks.
-- [ ] Remove legacy Electron Facebook path in a focused cleanup.
-- [ ] Decide TikTok/Shopee web ingestion strategy separately.
+No new Facebook Live session is required for this cleanup PR because it does not change the active Graph/server/web behavior. The two-live runtime evidence from the merged multi-live implementation remains the behavioral baseline. Any future change to Graph ingestion, concurrency, queueing, playback ownership or token handling must re-run the relevant runtime gate.

@@ -23,7 +23,7 @@ npm run build
 npm run dev
 ```
 
-`npm run build` also syntax-checks `web/app.js` before the runtime-module guard.
+`npm run build` also syntax-checks `web/app.js`.
 
 ## Project structure
 
@@ -64,7 +64,7 @@ Do not introduce a generic framework or global event bus for nine sessions.
 - Verify stopping one live keeps other lives active and drops only waiting queue items from the stopped source.
 - Verify repeated stop-one is a safe no-op at the HTTP behavior boundary.
 - Full typecheck/tests/build on Ubuntu + Windows CI.
-- Runtime merge gate: two real managed Facebook Lives active together, comments from both reach one sequential TTS queue.
+- Runtime gate: two real managed Facebook Lives active together, comments from both reach one sequential TTS queue.
 
 ## Boundaries
 
@@ -106,10 +106,10 @@ Do not introduce a generic framework or global event bus for nine sessions.
 13. Typecheck, full tests and build pass on Ubuntu + Windows.
 14. Real runtime evidence proves two Facebook Lives can feed the same sequential TTS queue.
 
-## Merge gate
+## Runtime gate status
 
-The PR must remain **Draft** until success criterion 14 is proven with a real two-live run and the evidence is recorded in `tasks/capture-findings.md`. Automated tests do not substitute for this gate.
+Success criterion 14 was satisfied before the multi-live change was merged. The detailed two-live evidence is retained in `tasks/capture-findings.md`. Future changes that can affect Graph ingestion, source isolation, queue ordering, playback ownership or token handling must re-run the relevant runtime checks; pure cleanup does not need to fabricate a new live session when active behavior is unchanged.
 
 ## Open questions
 
-None blocking for implementation. Auto-discovery, per-live voices and >9 sessions remain explicitly deferred. Real two-live runtime verification remains the merge gate.
+None blocking for the current implementation. Auto-discovery, per-live voices and >9 sessions remain explicitly deferred.
