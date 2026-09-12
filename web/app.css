@@ -29,6 +29,7 @@ h1 { margin: 4px 0 8px; font-size: clamp(2rem, 5vw, 3rem); }
 }
 
 h2 { margin: 0 0 14px; font-size: 1.15rem; }
+h3 { margin: 0; font-size: 1rem; }
 label { display: block; font-weight: 700; margin-bottom: 8px; }
 input {
   width: 100%;
@@ -51,6 +52,7 @@ button {
   font-weight: 700;
 }
 button.secondary { background: #e9edf3; color: #29344a; }
+button.small { min-height: 34px; padding: 5px 10px; }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .status { min-height: 24px; font-weight: 650; }
@@ -58,7 +60,34 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .hint { font-size: 0.88rem; margin-bottom: 0; }
 
 .section-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.compact-row { align-items: center; }
 .current { background: #f6f8fa; border-radius: 9px; padding: 12px; margin-top: 14px; }
+
+.live-panel {
+  margin-top: 16px;
+  border-top: 1px solid #edf0f3;
+  padding-top: 16px;
+}
+.live-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.live-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid #e2e7ed;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+.live-row span { font-weight: 700; overflow-wrap: anywhere; }
+.live-empty { color: #778195; padding: 6px 0; }
 
 .recent { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .recent li { border-top: 1px solid #edf0f3; padding-top: 12px; }
@@ -71,5 +100,6 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 @media (max-width: 600px) {
   .shell { width: min(100% - 20px, 860px); margin-top: 20px; }
   .section-row { flex-direction: column; }
+  .compact-row { flex-direction: row; }
   .actions button { flex: 1 1 auto; }
 }

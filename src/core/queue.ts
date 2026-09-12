@@ -42,6 +42,12 @@ export class CommentQueue {
     return this.queue.length;
   }
 
+  public removeWhere(predicate: (comment: Comment) => boolean): number {
+    const before = this.queue.length;
+    this.queue = this.queue.filter((comment) => !predicate(comment));
+    return before - this.queue.length;
+  }
+
   public clear(): void {
     this.queue = [];
   }

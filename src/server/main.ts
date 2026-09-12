@@ -1,20 +1,18 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { CommentDedup } from "../core/dedup";
-import { normalizeComment } from "../core/filter";
 import { CommentQueue } from "../core/queue";
 import type { Comment } from "../core/comment";
 import { PlaybackManager } from "../tts/playback-manager";
 import { TTSService } from "../tts/tts-service";
-import {
-  FacebookGraphCommentPoller,
-  type FacebookGraphComment,
-} from "./facebook-graph";
+import type { FacebookGraphComment } from "./facebook-graph";
+import { FacebookCommentProcessor } from "./facebook-comment-processor";
+import { FacebookLiveManager } from "./facebook-live-manager";
 import {
   isLoopbackHost,
   loadFacebookServerConfig,
   parseFacebookStartRequest,
+  parseFacebookStopRequest,
 } from "./config";
 import { SseHub } from "./events";
 import { BrowserPlaybackBridge } from "./playback-bridge";
@@ -37,26 +35,46 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be an integer between 1 and 65535");
 }
 
-const FACEBOOK_UNKNOWN_VIEWER = "Facebook viewer";
+const MAX_FACEBOOK_LIVES = 9;
 const webRoot = resolve(__dirname, "../../web");
 const hub = new SseHub();
-const graphPoller = new FacebookGraphCommentPoller();
+const liveManager = new FacebookLiveManager({ maxLives: MAX_FACEBOOK_LIVES });
+const commentProcessor = new FacebookCommentProcessor();
 const commentQueue = new CommentQueue(30, 30_000);
-const commentDedup = new CommentDedup({ windowMs: 60_000, maxEntries: 2000 });
 const ttsService = new TTSService();
 const playbackBridge = new BrowserPlaybackBridge((event) => {
   hub.broadcastOne(event);
 });
 let ttsPaused = false;
 
-function broadcastStatus(message: string, level: "info" | "error" = "info"): void {
+function liveStatePayload(): Record<string, unknown> {
+  const activeLiveIds = liveManager.activeLiveIds;
+  return {
+    active: activeLiveIds.length > 0,
+    liveVideoId: activeLiveIds[0] ?? null,
+    activeLiveIds,
+    activeCount: liveManager.activeCount,
+    pendingCount: liveManager.pendingCount,
+    maxLives: MAX_FACEBOOK_LIVES,
+  };
+}
+
+function broadcastLiveState(): void {
+  hub.broadcast({ type: "lives", ...liveStatePayload() });
+}
+
+function broadcastStatus(
+  liveVideoId: string,
+  message: string,
+  level: "info" | "error" = "info",
+): void {
   hub.broadcast({
     type: "status",
+    liveVideoId,
     message,
     level,
-    active: graphPoller.isActive,
-    liveVideoId: graphPoller.activeLiveVideoId,
   });
+  broadcastLiveState();
 }
 
 function broadcastQueueState(current: Comment | null = playbackManager.getCurrentComment()): void {
@@ -67,6 +85,7 @@ function broadcastQueueState(current: Comment | null = playbackManager.getCurren
     current: current
       ? {
           id: current.id,
+          sourceId: current.sourceId,
           username: current.username,
           text: current.text,
           sourceLabel: current.sourceLabel,
@@ -82,6 +101,7 @@ const playbackManager = new PlaybackManager(commentQueue, ttsService, {
       state: "speaking",
       comment: {
         id: comment.id,
+        sourceId: comment.sourceId,
         username: comment.username,
         text: comment.text,
         sourceLabel: comment.sourceLabel,
@@ -102,43 +122,20 @@ const playbackManager = new PlaybackManager(commentQueue, ttsService, {
   },
 });
 
-function handleGraphComment(graphComment: FacebookGraphComment): void {
-  const liveVideoId = graphPoller.activeLiveVideoId;
-  if (!liveVideoId) {
-    return;
-  }
-
-  const normalized = normalizeComment(graphComment.username, graphComment.text);
-  if (!normalized) {
-    return;
-  }
-
-  // Meta can omit commenter identity, causing unrelated viewers to share the fallback
-  // label. Keep that source-specific exception here instead of changing shared dedup rules.
-  const hasReliableViewerIdentity = normalized.username.toLowerCase() !== FACEBOOK_UNKNOWN_VIEWER.toLowerCase();
-  if (hasReliableViewerIdentity) {
-    if (commentDedup.isDuplicate(normalized.username, normalized.text)) {
-      return;
-    }
-    commentDedup.record(normalized.username, normalized.text);
-  }
-
+function handleGraphComment(liveVideoId: string, graphComment: FacebookGraphComment): void {
   const receivedAt = Date.now();
-  const item: Comment = {
-    id: graphComment.id,
-    platform: "facebook",
-    sourceId: `facebook-graph:${liveVideoId}`,
-    sourceLabel: "FB-API",
-    username: normalized.username,
-    text: normalized.text,
-    receivedAt,
-  };
+  const item = commentProcessor.process(liveVideoId, graphComment, receivedAt);
+  if (!item) {
+    return;
+  }
 
   commentQueue.enqueue(item);
   hub.broadcast({
     type: "comment",
+    liveVideoId,
     comment: {
       id: item.id,
+      sourceId: item.sourceId,
       username: item.username,
       text: item.text,
       sourceLabel: item.sourceLabel,
@@ -149,6 +146,16 @@ function handleGraphComment(graphComment: FacebookGraphComment): void {
   broadcastQueueState();
   void playbackManager.processNext();
 }
+
+const facebookEvents = {
+  onComment: handleGraphComment,
+  onStatus: (liveVideoId: string, message: string, level: "info" | "error") => {
+    if (!liveManager.activeLiveIds.includes(liveVideoId)) {
+      commentProcessor.clearLive(liveVideoId);
+    }
+    broadcastStatus(liveVideoId, message, level);
+  },
+};
 
 function securityHeaders(response: ServerResponse): void {
   response.setHeader("X-Content-Type-Options", "nosniff");
@@ -233,13 +240,25 @@ async function serveStatic(pathname: string, response: ServerResponse): Promise<
 function statusPayload(): Record<string, unknown> {
   const facebookConfig = loadFacebookServerConfig(process.env);
   return {
-    active: graphPoller.isActive,
-    liveVideoId: graphPoller.activeLiveVideoId,
+    ...liveStatePayload(),
     facebookConfigured: facebookConfig.ok,
     queueSize: commentQueue.size(),
     ttsPaused,
     browserClients: hub.clientCount,
   };
+}
+
+function startFailureStatus(error?: string): number {
+  if (!error) {
+    return 502;
+  }
+  if (/invalid facebook live/i.test(error)) {
+    return 400;
+  }
+  if (/already active|maximum \d+ facebook lives/i.test(error)) {
+    return 409;
+  }
+  return 502;
 }
 
 const server = createServer(async (request, response) => {
@@ -299,7 +318,7 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      const result = await graphPoller.start(
+      const result = await liveManager.startLive(
         {
           ...serverConfig.config,
           liveVideoIdOrUrl: browserRequest.liveVideoIdOrUrl,
@@ -307,29 +326,41 @@ const server = createServer(async (request, response) => {
           pageSize: 100,
           maxPagesPerPoll: 20,
         },
-        {
-          onComment: handleGraphComment,
-          onStatus: broadcastStatus,
-        },
+        facebookEvents,
       );
 
-      if (result.ok) {
-        commentQueue.clear();
-        commentDedup.clear();
-        broadcastQueueState();
-      }
-
-      sendJson(response, result.ok ? 200 : 502, result);
+      broadcastLiveState();
+      sendJson(response, result.ok ? 200 : startFailureStatus(result.error), {
+        ...result,
+        ...liveStatePayload(),
+      });
       return;
     }
 
     if (method === "POST" && url.pathname === "/api/facebook/stop") {
-      await readJsonBody(request);
-      graphPoller.stop();
+      const stopRequest = parseFacebookStopRequest(await readJsonBody(request));
+      if (!stopRequest.ok) {
+        sendJson(response, 400, stopRequest);
+        return;
+      }
+
+      if (stopRequest.liveVideoId) {
+        const liveVideoId = stopRequest.liveVideoId;
+        const stopped = liveManager.stopLive(liveVideoId);
+        commentProcessor.clearLive(liveVideoId);
+        commentQueue.removeWhere((comment) => comment.sourceId === `facebook-graph:${liveVideoId}`);
+        broadcastQueueState();
+        broadcastLiveState();
+        sendJson(response, 200, { ok: true, stopped, ...liveStatePayload() });
+        return;
+      }
+
+      liveManager.stopAll();
+      commentProcessor.clearAll();
       commentQueue.clear();
-      commentDedup.clear();
       broadcastQueueState();
-      sendJson(response, 200, { ok: true });
+      broadcastLiveState();
+      sendJson(response, 200, { ok: true, ...liveStatePayload() });
       return;
     }
 
@@ -387,8 +418,9 @@ server.listen(port, host, () => {
 });
 
 function shutdown(): void {
-  graphPoller.stop();
+  liveManager.stopAll();
   playbackBridge.cancelPending();
+  commentProcessor.clearAll();
   commentQueue.clear();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 2_000).unref();

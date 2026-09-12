@@ -2,27 +2,25 @@
 
 Local web operator app that reads **managed Facebook Page Live comments** with Vietnamese Edge TTS.
 
-The active direction is now **Facebook Graph API + Node web server**, not Facebook DOM scraping/Electron. The previous Electron implementation remains in the repository temporarily as historical/rollback code until the Graph runtime passes a real-live verification gate.
+The active direction is **Facebook Graph API + Node web server**, not Facebook DOM scraping/Electron. The previous Electron implementation remains in the repository temporarily as historical/rollback code.
 
 ## Current architecture
 
 ```text
 Facebook Graph API
       ↓ server-side Page Access Token
-FacebookGraphCommentPoller
-      ↓
-normalize → dedup (current live scope) → bounded FIFO queue
+2–9 independent FacebookGraphCommentPoller sessions
+      ↓ source identity = facebook-graph:<liveVideoId>
+normalize → per-live dedup → one bounded FIFO queue
       ↓
 msedge-tts (comment content only for FB-API)
       ↓
-SSE audio event
-      ↓
-operator browser Web Audio playback
-      ↓ completion POST
-server advances queue
+SSE audio event to one playback-owner browser
+      ↓ Web Audio completion POST
+server advances shared queue
 ```
 
-The server binds to `127.0.0.1` by default. It intentionally refuses non-loopback hosts in this slice because public hosting would require a separate authentication/authorization design.
+The server binds to `127.0.0.1` by default. It intentionally refuses non-loopback hosts because public hosting requires a separate authentication/authorization design.
 
 ## Security boundary
 
@@ -32,7 +30,7 @@ The browser:
 - never asks for the Page token;
 - never stores it in localStorage/sessionStorage;
 - never receives it through API/SSE responses;
-- sends only a Facebook Live Video ID/URL and playback-control commands.
+- sends only Facebook Live Video IDs/URLs and playback/control commands.
 
 Graph requests send the token in the `Authorization: Bearer ...` header, not the URL/query string.
 
@@ -76,44 +74,51 @@ npm run build
 npm run dev
 ```
 
-CI uses Node.js 24 and runs install + typecheck + tests + build on Ubuntu and Windows.
+CI uses Node.js 24 and runs install + typecheck + tests + build on Ubuntu and Windows. The build also syntax-checks the plain browser runtime with `node --check web/app.js`.
 
-## What this PR proves
+## Facebook multi-live behavior
 
-The first Graph/web slice is deliberately single-live:
-- parse numeric Live Video IDs and Facebook video URLs;
-- baseline comments already present at connect time;
-- poll every ~1s;
-- paginate backwards until the previous boundary so a burst larger than one page is not silently lost;
-- abort/discard stale in-flight work on stop/restart;
-- normalize/filter/dedup/queue comments;
-- synthesize **comment content only** for the `FB-API` source; viewer names and the `Facebook viewer` fallback are not spoken;
-- when Meta omits commenter identity, content-based dedup is bypassed so two valid anonymous comments with the same text are not collapsed;
-- play one audio item at a time in the browser and acknowledge completion to advance the queue;
-- show recent comments and observed Graph→app latency.
+The web runtime supports up to **9 active or connecting Facebook Lives**:
+- add Live Video IDs or Facebook video URLs without replacing existing sessions;
+- reject duplicate sessions and a 10th active/pending session without disturbing current lives;
+- baseline each live independently and emit only post-connect comments;
+- keep source identity distinct per live so comments do not cross-deduplicate;
+- route all accepted comments into one bounded FIFO/TTS queue;
+- synthesize **comment content only** for the `FB-API` source;
+- stop one live while keeping the others active; waiting queue items from only that live are removed;
+- repeated stop-one is a successful no-op;
+- stop all lives and clear the shared waiting queue;
+- show active live IDs, source live on recent comments, queue state and observed Graph→app latency;
+- keep single-browser playback ownership with handover after the playback-owner tab disconnects.
+
+A comment already being synthesized or played may finish when its individual live is stopped. Waiting comments from that source are removed.
 
 ## Runtime merge gate
 
-Automated tests are not enough for Meta integration. Before this PR is merge-ready, a real managed Facebook Page live must prove:
-- existing comments are not spoken after connect;
-- a new external-viewer marker comment returns the exact comment text; viewer username is intentionally not required for this product path;
-- two quick comments play sequentially without overlap;
-- observed comment latency is recorded;
-- browser storage/network URLs/log output contain no Page token.
+Automated tests are not enough for multi-live Meta integration. **The multi-live PR must remain Draft until this runtime gate is recorded.** A real session must prove:
+- two real Facebook Lives are connected at the same time;
+- both baseline existing comments independently;
+- a marker comment from each live reaches the UI/shared queue/TTS;
+- shared TTS remains sequential and speaks exact comment content only;
+- stopping Live A leaves Live B active and still receiving comments;
+- observed Graph→app latency is recorded for both sources;
+- browser storage/network URLs/SSE/log output contain no Page token.
 
 Record evidence in `tasks/capture-findings.md`.
 
 ## Deferred
 
-- Facebook 2→9 concurrent lives (after this single-live path is proven)
-- public deployment/authentication
-- Meta webhooks
+- more than 9 concurrent Facebook Lives
+- auto-discovery of Page live videos
+- per-live voices/queues
+- public deployment/authentication/webhooks
 - TikTok/Shopee web ingestion strategy
-- removal of legacy Electron code (focused follow-up after runtime proof)
+- removal of legacy Electron Facebook code in a focused cleanup
 
 ## Docs
 
-- `docs/specs/facebook-graph-web-mvp.md` — current contract
+- `docs/specs/facebook-graph-web-mvp.md` — original single-live Graph contract
+- `docs/specs/facebook-graph-multi-live.md` — 2→9 live contract
 - `docs/adr/0002-web-graph-api-runtime.md` — architecture decision
 - `tasks/plan.md` — implementation plan
 - `tasks/todo.md` — execution status

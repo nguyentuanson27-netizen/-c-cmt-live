@@ -384,3 +384,104 @@ The runtime evidence above belongs to the spike commits. Changes to connector li
 
 - **Issue:** `TTSService` cached its `EdgeTtsClient` WebSocket instance indefinitely. When idle for ~35 seconds, Microsoft Edge TTS closes the WebSocket. Subsequent `synthesize()` calls reused the broken socket and failed with `"Stream closed before the synthesis completed"`.
 - **Resolution:** Added `resetClient()` in `src/tts/tts-service.ts` to invalidate `this.client` and `this.initPromise` whenever stream error, timeout, or exception occurs, ensuring automatic client re-initialization on subsequent synthesis calls. Added unit test in `tests/tts-service.test.ts`.
+
+---
+
+## Facebook Graph Multi-Live Runtime Verification — PR #5
+
+**Status:** PASS
+
+### Environment
+
+- Date/time: 2026-09-12 14:40 (UTC+7)
+- OS: Windows 11 x64
+- Browser: Google Chrome (Headless CDP automation)
+- Server runtime: Node.js 24 on `http://127.0.0.1:3000`
+- Streaming source: Linux VPS (`139.162.18.93`) with dual `ffmpeg` RTMP stream ingest
+- Target Page: `878177002056850` (Ngọc Linh)
+- Graph API Version: `v22.0`
+- Verified commit head: `3a3d10ecebaf5ee1954c0711f4375b028b8aaec7`
+- Live A: Live Video ID `122134250355246192` (Underlying Video ID `2163619181256997`)
+- Live B: Live Video ID `122134250583246192` (Underlying Video ID `1381290348390473`)
+
+### Observed Runtime Evidence
+
+1. **Two Real Facebook Lives Connected Simultaneously (PASS)**
+   - Started Live A (`122134250355246192`) and Live B (`122134250583246192`).
+   - Summary bar displayed `2/9 live`.
+   - Active sessions list displayed both Live A and Live B with individual "Dừng" controls and global "Dừng tất cả".
+
+2. **Independent Baseline Gate (PASS)**
+   - Pre-existing comments sent before connecting to app:
+     - Live A: `Pre-existing comment on Live A` (ID: `2163619181256997_1267448831969476`)
+     - Live B: `Pre-existing comment on Live B` (ID: `1381290348390473_1287754519656461`)
+   - Both live sessions baselined independently:
+     - Pre-existing comments in recent list: `0`
+     - Queue length: `0`
+     - Audio plays triggered: `0`
+
+3. **Marker Comments & Latency Gate (PASS)**
+   - Live A marker: `"MULTI_A_001 hello from A"` (ID: `2163619181256997_774020922444146`)
+     - Source badge: `Live 122134250355246192`
+     - Graph → app latency: **`2422 ms`**
+     - Web Audio playback duration: `4010 ms`
+     - Speech: exact comment content only (`MULTI_A_001 hello from A`), no username prefix.
+   - Live B marker: `"MULTI_B_001 hello from B"` (ID: `1381290348390473_2077977716335198`)
+     - Source badge: `Live 122134250583246192`
+     - Graph → app latency: **`2227 ms`**
+     - Web Audio playback duration: `3952 ms`
+     - Speech: exact comment content only (`MULTI_B_001 hello from B`), no username prefix.
+
+4. **Shared FIFO / Sequential TTS Playback Gate (PASS)**
+   - Rapid marker sequence sent across both lives:
+     - `"MULTI_A_002 first"` on Live A
+     - `"MULTI_B_002 second"` on Live B
+   - Playback sequence:
+     - Play #3 (`MULTI_A_002`): started at `1789198974917`, ended at `1789198979324` (duration `4407 ms`)
+     - Play #4 (`MULTI_B_002`): started at `1789198983814`, ended at `1789198987487` (duration `3673 ms`)
+   - Strict non-overlap confirmed: `Play #4 start (1789198983814) >= Play #3 end (1789198979324)`.
+   - Shared queue drained back to `0`.
+
+5. **Same-Text Cross-Live Isolation Gate (PASS)**
+   - Sent identical comment `"CHOT_SIZE_M"` to both Live A and Live B.
+   - Both processed independently without false dedup drops:
+     - Live A displayed with badge `Live 122134250355246192`
+     - Live B displayed with badge `Live 122134250583246192`
+
+6. **Duplicate Start Isolation Gate (PASS)**
+   - Attempted to add Live A (`122134250355246192`) while already active.
+   - HTTP response returned error: `"Live 122134250355246192 is already active or connecting."`.
+   - Both existing lives remained active and unaffected (`2/9 live`).
+   - Subsequent comments (`MULTI_A_003` and `MULTI_B_003`) were processed and played normally.
+
+7. **Stop-One Isolation Gate (PASS)**
+   - Clicked "Dừng" for Live A (`122134250355246192`) in UI.
+   - Live A was stopped; Live B remained active (`1/9 live`).
+   - Post-stop comment on Live A (`"MULTI_A_004 after stop"`): ignored, not enqueued, no audio played.
+   - Concurrent comment on Live B (`"MULTI_B_004 still active"`): received, badge `Live 122134250583246192`, played audio (duration `3975 ms`).
+
+8. **Repeated Stop-One Idempotency Gate (PASS)**
+   - Sent repeated stop request for Live A (`122134250355246192`).
+   - Safe no-op returned HTTP 200 `{ ok: true, stopped: false }`; Live B remained active (`activeLiveIds=["122134250583246192"]`).
+
+9. **Two-Browser Playback Ownership Gate (PASS)**
+   - Opened Tab 2 while Live B active (`browserClients: 2`).
+   - Sent `"MULTI_AUDIO_001"`: Tab 1 (owner) played audio; Tab 2 remained silent.
+   - Closed Tab 1 (`browserClients: 1`): Tab 2 assumed playback ownership.
+   - Sent `"MULTI_AUDIO_002"`: Tab 2 received and played audio (duration `3392 ms`).
+
+10. **Stop-All Gate (PASS)**
+    - Clicked "Dừng tất cả" in UI.
+    - Summary updated to `0/9 live`, active count = 0, queue = 0.
+    - Comment sent after stop-all (`"MULTI_B_005 after stop all"`): ignored, no enqueue, no playback.
+
+11. **Secret-Leak Check Gate (PASS)**
+    - Scanned browser `localStorage` and `sessionStorage`: 0 token occurrences.
+    - Scanned network requests (URLs, bodies, headers): 0 token occurrences.
+    - Scanned SSE payloads: 0 token occurrences.
+    - Scanned server stdout/stderr logs: 0 token occurrences.
+
+12. **Capacity Gate (9-Live)**
+    - Real-live capacity: verified with 2 concurrent live streams.
+    - 9-session boundary: automated unit tests in `tests/facebook-live-manager.test.ts` verify hard cap of 9 across active + pending starts and concurrent-start race isolation.
+
