@@ -20,7 +20,7 @@ describe("TikTok Euler provider boundary", () => {
     expect(extractTikTokUniqueId(`@${"a".repeat(65)}`)).toBeNull();
   });
 
-  it("builds only the fixed Euler websocket URL with explicit decoded schema v2", () => {
+  it("builds only the fixed Euler websocket URL with the current SDK feature query contract", () => {
     const url = new URL(buildEulerWebSocketUrl("Creator_01", "secret-key"));
 
     expect(url.protocol).toBe("wss:");
@@ -28,7 +28,8 @@ describe("TikTok Euler provider boundary", () => {
     expect(url.pathname).toBe("/");
     expect(url.searchParams.get("uniqueId")).toBe("Creator_01");
     expect(url.searchParams.get("apiKey")).toBe("secret-key");
-    expect(url.searchParams.get("schemaVersion")).toBe("v2");
+    expect(url.searchParams.get("features.schemaVersion")).toBe("v2");
+    expect(url.searchParams.has("schemaVersion")).toBe(false);
     expect(url.searchParams.get("features.bundleEvents")).toBe("true");
     expect(url.searchParams.get("features.rawMessages")).toBe("false");
     expect(url.searchParams.get("features.normalizeUniqueId")).toBe("true");
