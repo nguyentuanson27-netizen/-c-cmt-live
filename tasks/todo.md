@@ -1,60 +1,56 @@
-# Web Graph Migration Todo
+# Facebook Graph Multi-Live Todo
 
 ## Define / plan
-- [x] Confirm web app replaces Windows Electron as active operator runtime.
-- [x] Confirm Facebook Graph API replaces Facebook DOM capture.
-- [x] Record server-side token boundary and loopback-first deployment.
-- [x] Record migration ADR and implementation plan.
+- [x] Single-live Graph web runtime merged to `main` at `c62ed6841ab951473f96ccb86ec0570c67a0592a`.
+- [x] Confirm next phase is 2→9 concurrent Facebook Lives.
+- [x] Keep one shared FIFO/TTS pipeline; FB-API speech remains comment content only.
+- [x] Keep Page token and Graph version server-side only.
+- [x] Record multi-live spec and implementation plan.
 
-## Task 1 — Facebook Graph connector
-- [x] RED tests for ID/URL validation and connector contract.
-- [x] RED test that access token is not placed in request URL.
-- [x] Test baseline + new comment emission.
-- [x] Test multi-page burst catch-up.
-- [x] Test stop/restart stale-request isolation.
-- [x] RED regression test for code-190 token expiry, followed by GREEN fix.
-- [x] Failed replacement start keeps the current live active until the replacement baseline succeeds.
-- [x] Implement connector and make focused tests GREEN.
+## Task 1 — Multi-live lifecycle manager
+- [ ] RED tests for 2+ independent live sessions.
+- [ ] RED test for duplicate start isolation.
+- [ ] RED test for 9-live active+pending cap and concurrent-start race.
+- [ ] RED test that one live error/stop does not terminate another.
+- [ ] Implement `FacebookLiveManager` and make focused tests GREEN.
 
-## Task 2 — Web server/SSE
-- [x] Add loopback HTTP server and static web UI.
-- [x] Read `FACEBOOK_PAGE_ACCESS_TOKEN` and `FACEBOOK_GRAPH_API_VERSION` server-side only.
-- [x] Add start/stop/status endpoints with bounded JSON parsing.
-- [x] Add SSE event stream and security headers.
-- [x] Deliver each playback event to one browser client only; transfer ownership after that SSE client disconnects.
-- [x] Accept IPv4/hostname/IPv6 loopback forms, including bracketed IPv6 origins.
-- [x] Add focused server-boundary tests.
+## Task 2 — Queue/source isolation
+- [ ] Preserve distinct `facebook-graph:<liveVideoId>` source IDs.
+- [ ] Scope content dedup per live.
+- [ ] Add generic selective queue removal with tests.
+- [ ] Stop one live removes only its waiting queue items; adding a live does not clear the queue.
+- [ ] Stop-all clears all waiting queue items.
 
-## Task 3 — Core/TTS
-- [x] Reset single-live dedup state only after a replacement live starts successfully and retain Live Video ID in source identity.
-- [x] Route Graph comments through normalize → dedup → bounded FIFO queue.
-- [x] For `FB-API`, synthesize only comment content; do not speak username or the `Facebook viewer` fallback.
-- [x] Do not content-deduplicate unattributed Facebook comments that share the `Facebook viewer` fallback identity.
-- [x] Send one audio item at a time to browser and await matching playback completion.
-- [x] Keep pause/resume/clear queue controls.
+## Task 3 — HTTP/SSE/UI
+- [ ] Start endpoint adds a live without replacing existing lives.
+- [ ] Stop endpoint can stop one live or all lives.
+- [ ] Status/SSE expose active live IDs/count without secrets.
+- [ ] UI lists active live IDs with individual Stop buttons and Stop all.
+- [ ] Status/comment events identify source live.
+- [ ] Existing pause/resume/clear queue and single-browser playback ownership remain intact.
 
 ## Automated verification
-- [x] Full `npm run typecheck` PASS on code head `b6e65f9465f92220a1882bbb2e3a90e3a1395166`.
-- [x] Full `npm test` PASS: 62/62 on code head `b6e65f9465f92220a1882bbb2e3a90e3a1395166`.
-- [x] Full `npm run build` + runtime-module guard PASS on code head `b6e65f9465f92220a1882bbb2e3a90e3a1395166`.
-- [x] CI PASS on Ubuntu + Windows for code head `b6e65f9465f92220a1882bbb2e3a90e3a1395166`.
-- [x] TTS reconnect regression coverage added; 63/63 tests and CI PASS on Ubuntu + Windows at `a41fb379925ce0f9d3257b89e046f5fa60979238`.
-- [x] RED verification for comment-only Graph speech: CI reproduced `": comment"` formatting and anonymous-comment dedup collision before the fix.
-- [x] Comment-only Graph speech + anonymous-comment dedup fix PASS on Ubuntu + Windows CI at code head `9b237d4af386a4386b3660783230ec3417e454ad`.
-- [x] Security/code self-review: no token in browser storage, Graph URL, logs or SSE payloads; browser cannot submit a token; local runtime refuses non-loopback binding; failed replacement starts preserve the current live/queue; playback is single-browser-owned.
+- [ ] `npm run typecheck` PASS.
+- [ ] `npm test` PASS.
+- [ ] `npm run build` PASS.
+- [ ] Ubuntu CI PASS on exact head.
+- [ ] Windows CI PASS on exact head.
+- [ ] Self-review has no Required findings.
 
 ## Runtime verification — merge gate
-- [x] Verify the actual Meta Graph API version (`v22.0`) and Page token permissions for the target Page/app (`878177002056850`).
-- [x] Real external viewer-account Facebook Live comment observed with exact marker text `VIEWER_TEST_001 hello`; Meta omitted viewer identity, which is now outside the required product contract.
-- [x] Existing comments remain baseline-only after connect (0 comments in recent, queue 0, 0 audio plays).
-- [x] Two quick Page-authored comments play sequentially without overlap (Play #2 ended at 1789142398915, Play #3 started at 1789142399959).
-- [x] Record observed Graph→app / end-to-end latency (Page-authored Graph → app: 1832 ms; external-viewer Graph → app: 2939 ms).
-- [x] Inspect browser storage, requests and server logs to confirm the Page token is absent (PASS - 0 occurrences found).
-- [x] Two-tab single playback & ownership handover on tab close verified.
-- [x] Edge TTS WebSocket reconnect bug identified, tested, and resolved.
-- [x] Viewer username is intentionally not a merge requirement; `FB-API` TTS contract is comment content only.
+- [ ] Two real Facebook Lives connected simultaneously.
+- [ ] Both lives baseline existing comments independently.
+- [ ] Marker comment from Live A reaches UI/shared queue/TTS.
+- [ ] Marker comment from Live B reaches UI/shared queue/TTS.
+- [ ] Shared TTS is sequential and speaks comment content only.
+- [ ] Stop Live A leaves Live B active and still receiving comments.
+- [ ] Page token absent from browser storage/URLs/SSE/logs.
+- [ ] Record Graph→app latency for both sources in `tasks/capture-findings.md`.
 
 ## Deferred
-- [ ] 2→9 Facebook lives after single-live Graph runtime passes.
-- [ ] Remove legacy Electron Facebook path in a focused cleanup after Graph runtime passes.
+- [ ] More than 9 concurrent Facebook Lives.
+- [ ] Auto-discovery of Page live videos.
+- [ ] Per-live voices/queues.
+- [ ] Public hosting/authentication/webhooks.
+- [ ] Remove legacy Electron Facebook path in a focused cleanup.
 - [ ] Decide TikTok/Shopee web ingestion strategy separately.
