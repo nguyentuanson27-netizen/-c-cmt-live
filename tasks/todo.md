@@ -1,40 +1,50 @@
-# Todo — Facebook Page Live Discovery
+# Todo — TikTok LIVE Ingestion
 
-## Define / plan
-- [x] Choose focused PR #7 scope: discover active managed-Page lives, operator selects, existing start flow connects.
-- [x] Keep Page token/API version server-side and preserve current 9-live/polling/queue/TTS behavior.
-- [x] Write discovery spec and implementation plan.
+## Define / research
+- [x] Select TikTok ingestion as PR #8 direction.
+- [x] Review current TikTok for Developers product/scope/comment documentation.
+- [x] Confirm no documented first-party real-time TikTok LIVE-comment API was found in the public developer surface.
+- [x] Review current unofficial `tiktok-live-connector` dependency/license/transport constraints.
+- [x] Review managed Euler Stream WebSocket option.
+- [x] Write `docs/specs/tiktok-live-ingestion.md`.
+- [ ] Product owner approves source option A/B/C.
+- [ ] Product owner confirms one-session/manual-start/shared-queue MVP assumptions.
+- [ ] Product owner confirms TikTok TTS format (`username: comment`) or updates requirement.
 
-## TDD discovery client
-- [x] Add RED tests for Graph discovery request/auth/filter/normalization/error handling.
-- [x] Confirm RED fails only because discovery implementation is missing/unfinished.
-- [x] Implement bounded server-side Graph discovery.
-- [x] Discovery tests GREEN.
-- [x] Add RED regressions for malformed successful envelopes and redact-before-bound error handling.
-- [x] Harden response validation/token redaction and return those regressions GREEN.
+## TDD transport adapter
+- [ ] Add RED tests for creator input parsing and connect/stop lifecycle.
+- [ ] Add RED tests for external event validation/normalization/dedup identity.
+- [ ] Add RED tests for stale callback isolation and bounded reconnect/error handling.
+- [ ] Add RED tests for provider-secret redaction.
+- [ ] Implement the approved transport adapter.
+- [ ] Focused adapter tests GREEN.
 
-## HTTP / UI
-- [x] Add trusted-origin `GET /api/facebook/live-videos`.
-- [x] Add **Tìm live đang phát** UI and safe result rendering.
-- [x] Reuse existing `/api/facebook/start` when operator selects a discovered live.
-- [x] Preserve manual ID/URL entry and all current multi-live behavior.
-- [x] Preserve explicit not-yet-searched, empty, and error discovery UI states.
+## HTTP / queue / UI
+- [ ] Add bounded server-side TikTok start/stop API contract.
+- [ ] Feed normalized TikTok comments into the existing shared FIFO/TTS pipeline.
+- [ ] Keep Facebook sessions independent from TikTok connect/stop/failure.
+- [ ] Add safe TikTok start/stop/status UI using `textContent` only.
+- [ ] Preserve playback-owner and pause/resume behavior.
+- [ ] Add integration/boundary tests.
 
 ## Verification
-- [x] `npm ci` PASS in CI.
-- [x] `npm run typecheck` PASS.
-- [x] `npm test` PASS.
-- [x] `npm run build` PASS, including `node --check web/app.js`.
-- [x] Ubuntu CI PASS.
-- [x] Windows CI PASS.
-- [x] Self-review completed with no remaining Required findings.
+- [ ] `npm ci` PASS in CI.
+- [ ] `npm run typecheck` PASS.
+- [ ] `npm test` PASS.
+- [ ] `npm run build` PASS, including `node --check web/app.js`.
+- [ ] Ubuntu CI PASS.
+- [ ] Windows CI PASS.
+- [ ] Dependency/supply-chain review completed for any new package/service.
+- [ ] Self-review completed with no remaining Required findings.
 
 ## Runtime merge gate
-- [ ] Real managed Page has at least one active live during discovery test.
-- [ ] Discovery returns the expected active Live Video ID without exposing the Page token.
-- [ ] Operator adds that discovered live and existing baseline/comment/TTS flow connects successfully.
-- [ ] Browser storage/network URLs/SSE/server logs contain zero Page-token occurrences.
-- [ ] Record evidence in `tasks/capture-findings.md`.
-- [ ] Mark PR #7 Ready only after the runtime gate passes.
+- [ ] Connect to a real TikTok LIVE using the approved transport.
+- [ ] Pre-connect/initial history is not replayed as new speech.
+- [ ] New viewer comment reaches recent UI/shared queue/TTS.
+- [ ] TikTok TTS matches the approved text-format contract.
+- [ ] Stop TikTok while Facebook remains active; Facebook continues normally.
+- [ ] Browser storage/URLs/API/SSE/server logs contain zero provider-secret occurrences.
+- [ ] Record sanitized evidence in `tasks/capture-findings.md`.
+- [ ] Mark PR #8 Ready only after runtime gate passes.
 
-Runtime gate status: **NOT RUN in this agent session**. No browser/DevTools runtime or Facebook Page credential/live session is available here, so the real-Meta gate must remain pending rather than inferred from mocks/CI.
+Current status: **BLOCKED ON SOURCE DECISION**. No TikTok production connector code will be written until the external transport choice is explicitly approved.
