@@ -19,50 +19,50 @@ Task 5 Two-live real runtime verification
 ## Task 1 — Multi-live lifecycle manager
 
 **Acceptance criteria:**
-- [ ] Add `FacebookLiveManager` around independent `FacebookGraphCommentPoller` instances.
-- [ ] Reject duplicate live IDs without disturbing the active session.
-- [ ] Enforce a hard cap of 9 across active + pending starts.
-- [ ] Concurrent starts cannot race past the cap.
-- [ ] Failed baseline/start does not consume a slot or affect other lives.
-- [ ] Token-expiry/error in one poller removes only that live from manager state.
-- [ ] Stop one and stop-all are isolated and idempotent.
+- [x] Add `FacebookLiveManager` around independent `FacebookGraphCommentPoller` instances.
+- [x] Reject duplicate live IDs without disturbing the active session.
+- [x] Enforce a hard cap of 9 across active + pending starts.
+- [x] Concurrent starts cannot race past the cap.
+- [x] Failed baseline/start does not consume a slot or affect other lives.
+- [x] Token-expiry/error in one poller removes only that live from manager state.
+- [x] Stop one and stop-all are isolated and idempotent at the HTTP behavior boundary.
 
 **Verification:** focused manager tests written RED first, then full suite.
 
 ## Task 2 — Shared FIFO with per-live isolation
 
 **Acceptance criteria:**
-- [ ] Graph comments carry `sourceId = facebook-graph:<liveVideoId>`.
-- [ ] Content dedup state is scoped per live so identical comments on different lives do not collide.
-- [ ] Add a generic queue selective-removal primitive if needed.
-- [ ] Stopping one live removes only waiting items from that source; currently playing audio may finish.
-- [ ] Adding a live never clears existing queue items.
-- [ ] Stop-all clears all waiting queue items.
+- [x] Graph comments carry `sourceId = facebook-graph:<liveVideoId>`.
+- [x] Content dedup state is scoped per live so identical comments on different lives do not collide.
+- [x] Add a generic queue selective-removal primitive if needed.
+- [x] Stopping one live removes only waiting items from that source; currently processing/playing audio may finish.
+- [x] Adding a live never clears existing queue items.
+- [x] Stop-all clears all waiting queue items.
 
 **Verification:** queue/source regression tests + full suite.
 
 ## Task 3 — Web API/SSE/UI
 
 **Acceptance criteria:**
-- [ ] `/api/facebook/start` adds a live instead of replacing all sessions.
-- [ ] `/api/facebook/stop` accepts an optional `liveVideoId`; omitted means stop-all for compatibility.
-- [ ] `/api/status` and SSE snapshot expose active live IDs/count without exposing secrets.
-- [ ] Status/comment events identify the source live.
-- [ ] UI shows up to 9 active live IDs with individual Stop controls plus Stop all.
-- [ ] Existing TTS pause/clear/playback-owner behavior remains unchanged.
-- [ ] UI and server validate all request payloads and remain loopback-only.
+- [x] `/api/facebook/start` adds a live instead of replacing all sessions.
+- [x] `/api/facebook/stop` accepts an optional `liveVideoId`; omitted means stop-all for compatibility.
+- [x] `/api/status` and SSE snapshot expose active live IDs/count without exposing secrets.
+- [x] Status/comment events identify the source live.
+- [x] UI shows up to 9 active live IDs with individual Stop controls plus Stop all.
+- [x] Existing TTS pause/clear/playback-owner behavior remains unchanged.
+- [x] UI and server validate all request payloads and remain loopback-only.
 
-**Verification:** focused boundary tests, keyboard/basic accessibility review, full typecheck/tests/build.
+**Verification:** focused boundary tests, keyboard/basic accessibility review, full typecheck/tests/build. Browser runtime verification is part of Task 5 because this session has no browser/DevTools tool.
 
 ## Task 4 — Automated verification and review
 
 **Acceptance criteria:**
-- [ ] `npm run typecheck` PASS.
-- [ ] `npm test` PASS.
-- [ ] `npm run build` PASS.
-- [ ] Ubuntu + Windows CI PASS on exact head.
-- [ ] Self-review: correctness → security → architecture → simplicity → performance.
-- [ ] No unresolved Required findings.
+- [x] `npm run typecheck` PASS.
+- [x] `npm test` PASS (75/75 on implementation head).
+- [x] `npm run build` PASS, including browser JS syntax check and runtime-module guard.
+- [x] Ubuntu + Windows CI PASS on implementation head.
+- [x] Self-review: correctness → security → architecture → simplicity → performance.
+- [x] One Required idempotent-stop finding was fixed; no remaining Required code findings.
 
 ## Task 5 — Runtime merge gate
 
