@@ -4,6 +4,7 @@ import {
   isLoopbackHost,
   loadFacebookServerConfig,
   parseFacebookStartRequest,
+  parseFacebookStopRequest,
 } from "../src/server/config";
 import { SseHub } from "../src/server/events";
 import { BrowserPlaybackBridge } from "../src/server/playback-bridge";
@@ -47,6 +48,17 @@ describe("web runtime server boundaries", () => {
       error: expect.stringContaining("server"),
     });
     expect(parseFacebookStartRequest({ liveVideoIdOrUrl: "" }).ok).toBe(false);
+  });
+
+  it("parses stop-one or stop-all requests without accepting secrets", () => {
+    expect(parseFacebookStopRequest({})).toEqual({ ok: true });
+    expect(parseFacebookStopRequest(null)).toEqual({ ok: true });
+    expect(parseFacebookStopRequest({ liveVideoId: "123456789" })).toEqual({
+      ok: true,
+      liveVideoId: "123456789",
+    });
+    expect(parseFacebookStopRequest({ liveVideoId: "not-an-id" }).ok).toBe(false);
+    expect(parseFacebookStopRequest({ token: "SHOULD_NOT_BE_HERE" }).ok).toBe(false);
   });
 });
 
