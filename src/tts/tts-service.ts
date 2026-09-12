@@ -4,7 +4,7 @@ import type { Comment } from "../core/comment";
 export type EdgeTtsClient = Pick<MsEdgeTTS, "setMetadata" | "toStream">;
 
 export function formatCommentForTTS(comment: Comment): string {
-  if (comment.sourceLabel === "FB-API") {
+  if (comment.sourceId.startsWith("facebook-graph:")) {
     return comment.text;
   }
   return `${comment.username}: ${comment.text}`;
