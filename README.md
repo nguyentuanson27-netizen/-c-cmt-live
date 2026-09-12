@@ -74,7 +74,7 @@ npm run build
 npm run dev
 ```
 
-CI uses Node.js 24 and runs install + typecheck + tests + build on Ubuntu and Windows.
+CI uses Node.js 24 and runs install + typecheck + tests + build on Ubuntu and Windows. The build also syntax-checks the plain browser runtime with `node --check web/app.js`.
 
 ## Facebook multi-live behavior
 
@@ -86,15 +86,16 @@ The web runtime supports up to **9 active or connecting Facebook Lives**:
 - route all accepted comments into one bounded FIFO/TTS queue;
 - synthesize **comment content only** for the `FB-API` source;
 - stop one live while keeping the others active; waiting queue items from only that live are removed;
+- repeated stop-one is a successful no-op;
 - stop all lives and clear the shared waiting queue;
 - show active live IDs, source live on recent comments, queue state and observed Graph→app latency;
 - keep single-browser playback ownership with handover after the playback-owner tab disconnects.
 
-Currently playing audio may finish when an individual live is stopped. This keeps stop-one isolated from unrelated sessions and avoids interrupting another live's shared playback path.
+A comment already being synthesized or played may finish when its individual live is stopped. Waiting comments from that source are removed.
 
 ## Runtime merge gate
 
-Automated tests are not enough for multi-live Meta integration. Before the multi-live PR is merge-ready, real runtime evidence must prove:
+Automated tests are not enough for multi-live Meta integration. **The multi-live implementation is not merge-ready until this runtime gate is recorded.** A real session must prove:
 - two real Facebook Lives are connected at the same time;
 - both baseline existing comments independently;
 - a marker comment from each live reaches the UI/shared queue/TTS;
