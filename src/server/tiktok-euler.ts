@@ -15,17 +15,18 @@ const MAX_ERROR_LENGTH = 300;
 const UNIQUE_ID_PATTERN = /^[A-Za-z0-9._]+$/;
 
 function boundedString(value: unknown, maxLength: number): string | null {
-  if (typeof value !== "string") {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      value = String(value);
-    } else if (typeof value === "bigint") {
-      value = value.toString();
-    } else {
-      return null;
-    }
+  let stringValue: string;
+  if (typeof value === "string") {
+    stringValue = value;
+  } else if (typeof value === "number" && Number.isFinite(value)) {
+    stringValue = String(value);
+  } else if (typeof value === "bigint") {
+    stringValue = value.toString();
+  } else {
+    return null;
   }
 
-  const trimmed = value.trim();
+  const trimmed = stringValue.trim();
   if (!trimmed) {
     return null;
   }
