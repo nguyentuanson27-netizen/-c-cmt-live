@@ -9,6 +9,8 @@ The repository has one active runtime: **Facebook Graph API + local Node.js web 
 ```text
 Facebook Graph API
       ↓ server-side Page Access Token
+optional Page live discovery → operator selects live
+      ↓
 2–9 independent FacebookGraphCommentPoller sessions
       ↓ source identity = facebook-graph:<liveVideoId>
 normalize → per-live dedup → one bounded FIFO queue
@@ -76,6 +78,12 @@ npm run dev
 
 CI uses Node.js 24 and runs install + typecheck + tests + build on Ubuntu and Windows. The build syntax-checks the plain browser runtime with `node --check web/app.js`.
 
+## Facebook live discovery
+
+The local operator can click **Tìm live đang phát** to request a bounded server-side list of currently-live videos for the configured managed Page. Discovery keeps the Page token on the server, returns only bounded live metadata to the browser, and never auto-starts a session. The operator explicitly clicks **Thêm**, which reuses the existing `/api/facebook/start` baseline/polling/TTS flow. Manual Live Video ID/URL entry remains available.
+
+The discovery Graph edge/filter is intentionally runtime-gated because current official Meta reference pages were not reliably reachable during implementation. Automated tests verify request construction, secret handling, response validation, UI wiring, and error behavior; a real managed-Page discovery test is still required before PR #7 is merge-ready.
+
 ## Facebook multi-live behavior
 
 The web runtime supports up to **9 active or connecting Facebook Lives**:
@@ -102,7 +110,6 @@ The detailed record is in `tasks/capture-findings.md`. Future changes to Graph i
 ## Deferred
 
 - more than 9 concurrent Facebook Lives
-- auto-discovery of Page live videos
 - per-live voices/queues
 - public deployment/authentication/webhooks
 - TikTok/Shopee web ingestion strategy
@@ -111,6 +118,7 @@ The detailed record is in `tasks/capture-findings.md`. Future changes to Graph i
 
 - `docs/specs/facebook-graph-web-mvp.md` — single-live Graph foundation
 - `docs/specs/facebook-graph-multi-live.md` — current 2→9 live contract
+- `docs/specs/facebook-live-discovery.md` — Page live-discovery contract and runtime gate
 - `docs/specs/remove-legacy-electron.md` — focused Electron-removal contract
 - `docs/adr/0001-electron-local-browser-capture.md` — superseded historical decision
 - `docs/adr/0002-web-graph-api-runtime.md` — current architecture decision

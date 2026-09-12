@@ -20,9 +20,19 @@
         <input id="live-input" type="text" autocomplete="off" placeholder="1234567890 hoặc https://facebook.com/.../videos/..." />
         <div class="actions">
           <button id="start" type="button">Thêm live</button>
+          <button id="discover-lives" type="button" class="secondary">Tìm live đang phát</button>
           <button id="stop-all" type="button" class="secondary">Dừng tất cả</button>
         </div>
         <p id="status" class="status" role="status" aria-live="polite">Đang kiểm tra cấu hình server…</p>
+        <div class="live-panel" aria-labelledby="discovered-lives-heading">
+          <div class="section-row compact-row">
+            <h3 id="discovered-lives-heading">Live tìm thấy</h3>
+            <span id="discovery-summary" class="muted">Chưa tìm</span>
+          </div>
+          <ul id="discovered-lives" class="live-list">
+            <li class="live-empty">Bấm “Tìm live đang phát” để tải danh sách từ Facebook Graph API.</li>
+          </ul>
+        </div>
         <div class="live-panel" aria-labelledby="active-lives-heading">
           <div class="section-row compact-row">
             <h3 id="active-lives-heading">Live đang theo dõi</h3>

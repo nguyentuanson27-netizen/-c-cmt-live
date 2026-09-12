@@ -63,4 +63,18 @@ describe("repository runtime boundary", () => {
     expect(existsSync(resolve(root, "web/index.html"))).toBe(true);
     expect(existsSync(resolve(root, "web/app.js"))).toBe(true);
   });
+
+  it("wires Page live discovery through the web runtime without HTML injection", () => {
+    const server = readFileSync(resolve(root, "src/server/main.ts"), "utf8");
+    const html = readFileSync(resolve(root, "web/index.html"), "utf8");
+    const app = readFileSync(resolve(root, "web/app.js"), "utf8");
+
+    expect(server).toContain('url.pathname === "/api/facebook/live-videos"');
+    expect(server).toContain("discoverFacebookLiveVideos");
+    expect(html).toContain('id="discover-lives"');
+    expect(html).toContain('id="discovered-lives"');
+    expect(app).toContain('getJson("/api/facebook/live-videos")');
+    expect(app).toContain("startLive(live.id)");
+    expect(app).not.toContain(".innerHTML");
+  });
 });

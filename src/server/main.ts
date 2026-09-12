@@ -7,6 +7,7 @@ import { PlaybackManager } from "../tts/playback-manager";
 import { TTSService } from "../tts/tts-service";
 import type { FacebookGraphComment } from "./facebook-graph";
 import { FacebookCommentProcessor } from "./facebook-comment-processor";
+import { discoverFacebookLiveVideos } from "./facebook-live-discovery";
 import { FacebookLiveManager } from "./facebook-live-manager";
 import {
   isLoopbackHost,
@@ -277,6 +278,26 @@ const server = createServer(async (request, response) => {
 
     if (method === "GET" && url.pathname === "/api/status") {
       sendJson(response, 200, statusPayload());
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/api/facebook/live-videos") {
+      if (!isTrustedOrigin(request)) {
+        sendJson(response, 403, { ok: false, error: "Untrusted browser origin" });
+        return;
+      }
+
+      const serverConfig = loadFacebookServerConfig(process.env);
+      if (!serverConfig.ok) {
+        sendJson(response, 503, serverConfig);
+        return;
+      }
+
+      const result = await discoverFacebookLiveVideos({
+        ...serverConfig.config,
+        limit: 25,
+      });
+      sendJson(response, result.ok ? 200 : 502, result);
       return;
     }
 
