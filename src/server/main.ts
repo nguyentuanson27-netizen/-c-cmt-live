@@ -346,18 +346,18 @@ const server = createServer(async (request, response) => {
 
       if (stopRequest.liveVideoId) {
         const liveVideoId = stopRequest.liveVideoId;
-        if (!liveManager.stopLive(liveVideoId)) {
-          sendJson(response, 404, { ok: false, error: `Facebook Live ${liveVideoId} is not active or connecting` });
-          return;
-        }
+        const stopped = liveManager.stopLive(liveVideoId);
         commentProcessor.clearLive(liveVideoId);
         commentQueue.removeWhere((comment) => comment.sourceId === `facebook-graph:${liveVideoId}`);
-      } else {
-        liveManager.stopAll();
-        commentProcessor.clearAll();
-        commentQueue.clear();
+        broadcastQueueState();
+        broadcastLiveState();
+        sendJson(response, 200, { ok: true, stopped, ...liveStatePayload() });
+        return;
       }
 
+      liveManager.stopAll();
+      commentProcessor.clearAll();
+      commentQueue.clear();
       broadcastQueueState();
       broadcastLiveState();
       sendJson(response, 200, { ok: true, ...liveStatePayload() });
