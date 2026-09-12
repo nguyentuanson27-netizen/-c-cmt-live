@@ -42,6 +42,7 @@ type TikTokEulerSessionDependencies = {
 type StartResult = { ok: true; creator: string } | { ok: false; error: string };
 
 const MAX_RECONNECT_ATTEMPTS = 5;
+const CONNECT_TIMEOUT_MS = 20_000;
 const RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000] as const;
 const RETRYABLE_CLOSE_CODES = new Set([1011, 4006, 4429, 4500, 4555, 4556, 4557]);
 
@@ -62,6 +63,7 @@ export class TikTokEulerSession {
 
   private generation = 0;
   private socket: TikTokEulerSocket | null = null;
+  private connectTimer: TimerHandle | null = null;
   private reconnectTimer: TimerHandle | null = null;
   private creator: string | null = null;
   private apiKey = "";
@@ -124,6 +126,7 @@ export class TikTokEulerSession {
     const socket = this.socket;
     const resolveStart = this.pendingStartResolve;
     ++this.generation;
+    this.cancelConnectTimeout();
     this.cancelReconnect();
     this.socket = null;
     this.creator = null;
@@ -160,11 +163,24 @@ export class TikTokEulerSession {
     }
 
     this.socket = socket;
+    this.connectTimer = this.setTimeoutFn(() => {
+      this.connectTimer = null;
+      if (!this.isCurrent(generation, socket)) {
+        return;
+      }
+      this.finishTerminal(generation, `Euler Stream connection timed out after ${CONNECT_TIMEOUT_MS} ms`);
+      try {
+        socket.close(1000, "Connect timeout");
+      } catch {
+        // State has already been invalidated by finishTerminal.
+      }
+    }, CONNECT_TIMEOUT_MS);
 
     socket.addEventListener("open", () => {
       if (!this.isCurrent(generation, socket)) {
         return;
       }
+      this.cancelConnectTimeout();
       this.connecting = false;
       const resolveStart = this.pendingStartResolve;
       this.pendingStartResolve = null;
@@ -193,6 +209,7 @@ export class TikTokEulerSession {
       if (!this.isCurrent(generation, socket)) {
         return;
       }
+      this.cancelConnectTimeout();
       this.socket = null;
       this.handleClose(generation, event.code, event.reason || "");
     });
@@ -240,6 +257,7 @@ export class TikTokEulerSession {
 
     const creator = this.creator;
     const resolveStart = this.pendingStartResolve;
+    this.cancelConnectTimeout();
     this.cancelReconnect();
     this.socket = null;
     this.creator = null;
@@ -255,6 +273,13 @@ export class TikTokEulerSession {
 
   private isCurrent(generation: number, socket: TikTokEulerSocket): boolean {
     return generation === this.generation && this.socket === socket && Boolean(this.creator);
+  }
+
+  private cancelConnectTimeout(): void {
+    if (this.connectTimer !== null) {
+      this.clearTimeoutFn(this.connectTimer);
+      this.connectTimer = null;
+    }
   }
 
   private cancelReconnect(): void {
