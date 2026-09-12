@@ -78,7 +78,7 @@ describe("TikTok Euler provider boundary", () => {
     ]);
   });
 
-  it("bounds bundle work and ignores malformed payloads", () => {
+  it("bounds bundle work and ignores malformed or oversized payloads", () => {
     expect(parseEulerMessageBundle("not json")).toEqual([]);
     expect(parseEulerMessageBundle(JSON.stringify({ messages: {} }))).toEqual([]);
 
@@ -92,6 +92,19 @@ describe("TikTok Euler provider boundary", () => {
     }));
 
     expect(parseEulerMessageBundle(JSON.stringify({ timestamp: 123, messages }))).toHaveLength(200);
+
+    const oversized = JSON.stringify({
+      padding: "x".repeat(1_100_000),
+      messages: [{
+        type: "WebcastChatMessage",
+        data: {
+          common: { msgId: "oversized" },
+          user: { uniqueId: "viewer" },
+          comment: "must be dropped before JSON parse work",
+        },
+      }],
+    });
+    expect(parseEulerMessageBundle(oversized)).toEqual([]);
   });
 
   it("redacts the full API key before bounding provider error text", () => {
