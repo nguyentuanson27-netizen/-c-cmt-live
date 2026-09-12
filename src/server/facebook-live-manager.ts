@@ -71,10 +71,10 @@ export class FacebookLiveManager {
     const wrappedEvents: FacebookGraphEvents = {
       onComment: (comment) => events.onComment(liveVideoId, comment),
       onStatus: (message, level) => {
-        events.onStatus(liveVideoId, message, level);
         if (!poller.isActive && this.activePollers.get(liveVideoId) === poller) {
           this.activePollers.delete(liveVideoId);
         }
+        events.onStatus(liveVideoId, message, level);
       },
     };
 
