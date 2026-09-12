@@ -6,25 +6,28 @@
 - [x] Write discovery spec and implementation plan.
 
 ## TDD discovery client
-- [ ] Add RED tests for Graph discovery request/auth/filter/normalization/error handling.
-- [ ] Confirm RED fails only because discovery implementation is missing/unfinished.
-- [ ] Implement bounded server-side Graph discovery.
-- [ ] Discovery tests GREEN.
+- [x] Add RED tests for Graph discovery request/auth/filter/normalization/error handling.
+- [x] Confirm RED fails only because discovery implementation is missing/unfinished.
+- [x] Implement bounded server-side Graph discovery.
+- [x] Discovery tests GREEN.
+- [x] Add RED regressions for malformed successful envelopes and redact-before-bound error handling.
+- [x] Harden response validation/token redaction and return those regressions GREEN.
 
 ## HTTP / UI
-- [ ] Add trusted-origin `GET /api/facebook/live-videos`.
-- [ ] Add **Tìm live đang phát** UI and safe result rendering.
-- [ ] Reuse existing `/api/facebook/start` when operator selects a discovered live.
-- [ ] Preserve manual ID/URL entry and all current multi-live behavior.
+- [x] Add trusted-origin `GET /api/facebook/live-videos`.
+- [x] Add **Tìm live đang phát** UI and safe result rendering.
+- [x] Reuse existing `/api/facebook/start` when operator selects a discovered live.
+- [x] Preserve manual ID/URL entry and all current multi-live behavior.
+- [x] Preserve explicit not-yet-searched, empty, and error discovery UI states.
 
 ## Verification
-- [ ] `npm ci` PASS.
-- [ ] `npm run typecheck` PASS.
-- [ ] `npm test` PASS.
-- [ ] `npm run build` PASS.
-- [ ] Ubuntu CI PASS.
-- [ ] Windows CI PASS.
-- [ ] Self-review completed with no Required findings.
+- [x] `npm ci` PASS in CI.
+- [x] `npm run typecheck` PASS.
+- [x] `npm test` PASS.
+- [x] `npm run build` PASS, including `node --check web/app.js`.
+- [x] Ubuntu CI PASS.
+- [x] Windows CI PASS.
+- [x] Self-review completed with no remaining Required findings.
 
 ## Runtime merge gate
 - [ ] Real managed Page has at least one active live during discovery test.
@@ -33,3 +36,5 @@
 - [ ] Browser storage/network URLs/SSE/server logs contain zero Page-token occurrences.
 - [ ] Record evidence in `tasks/capture-findings.md`.
 - [ ] Mark PR #7 Ready only after the runtime gate passes.
+
+Runtime gate status: **NOT RUN in this agent session**. No browser/DevTools runtime or Facebook Page credential/live session is available here, so the real-Meta gate must remain pending rather than inferred from mocks/CI.
