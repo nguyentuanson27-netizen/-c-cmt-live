@@ -6,6 +6,10 @@ const discoveredLivesElement = document.querySelector("#discovered-lives");
 const discoverySummary = document.querySelector("#discovery-summary");
 const activeLivesElement = document.querySelector("#active-lives");
 const liveSummary = document.querySelector("#live-summary");
+const tiktokInput = document.querySelector("#tiktok-input");
+const tiktokStartButton = document.querySelector("#tiktok-start");
+const tiktokStopButton = document.querySelector("#tiktok-stop");
+const tiktokStatusElement = document.querySelector("#tiktok-status");
 const toggleTtsButton = document.querySelector("#toggle-tts");
 const clearQueueButton = document.querySelector("#clear-queue");
 const statusElement = document.querySelector("#status");
@@ -21,10 +25,19 @@ let discoveryAttempted = false;
 let discoveryFailed = false;
 let pendingCount = 0;
 let maxLives = 9;
+let tiktokConfigured = false;
+let tiktokActive = false;
+let tiktokConnecting = false;
+let tiktokCreator = null;
 
 function setStatus(message, level = "info") {
   statusElement.textContent = message;
   statusElement.dataset.level = level;
+}
+
+function setTikTokStatus(message, level = "info") {
+  tiktokStatusElement.textContent = message;
+  tiktokStatusElement.dataset.level = level;
 }
 
 async function readJsonResponse(response) {
@@ -91,7 +104,9 @@ async function playAudioEvent(event) {
     });
     success = true;
   } catch (error) {
-    setStatus(`Không phát được audio: ${error instanceof Error ? error.message : "unknown error"}`, "error");
+    const message = `Không phát được audio: ${error instanceof Error ? error.message : "unknown error"}`;
+    setStatus(message, "error");
+    setTikTokStatus(message, "error");
   }
 
   try {
@@ -117,6 +132,22 @@ async function stopLive(liveVideoId) {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : `Không thể dừng Live ${liveVideoId}`, "error");
   }
+}
+
+async function startTikTok(creator) {
+  await unlockAudio();
+  const result = await postJson("/api/tiktok/start", { creator });
+  applyTikTokState(result);
+  const connectedCreator = typeof result.creator === "string" ? result.creator : tiktokCreator;
+  setTikTokStatus(`Đã kết nối TikTok @${connectedCreator}. Chờ comment mới…`);
+  return result;
+}
+
+async function stopTikTok() {
+  const result = await postJson("/api/tiktok/stop", {});
+  applyTikTokState(result);
+  setTikTokStatus(result.stopped ? "Đã dừng TikTok LIVE." : "TikTok LIVE đã dừng trước đó.");
+  return result;
 }
 
 function appendDiscoveryMessage(message) {
@@ -220,6 +251,11 @@ function renderLives() {
   }
 }
 
+function renderTikTokState() {
+  tiktokStartButton.disabled = !tiktokConfigured || tiktokActive || tiktokConnecting;
+  tiktokStopButton.disabled = !tiktokActive && !tiktokConnecting;
+}
+
 function applyLiveState(state) {
   activeLiveIds = Array.isArray(state.activeLiveIds)
     ? state.activeLiveIds.filter((value) => typeof value === "string")
@@ -230,19 +266,39 @@ function applyLiveState(state) {
   renderDiscoveredLives();
 }
 
-function addRecent(comment, liveVideoId) {
+function applyTikTokState(state) {
+  tiktokActive = Boolean(state.tiktokActive);
+  tiktokConnecting = Boolean(state.tiktokConnecting);
+  tiktokCreator = typeof state.tiktokCreator === "string" ? state.tiktokCreator : null;
+  renderTikTokState();
+}
+
+function addRecent(comment, event) {
+  if (!comment || typeof comment !== "object") {
+    return;
+  }
+
   const item = document.createElement("li");
   const meta = document.createElement("div");
   meta.className = "comment-meta";
   const badge = document.createElement("span");
   badge.className = "badge";
-  badge.textContent = liveVideoId ? `Live ${liveVideoId}` : "Facebook Live";
+  const isTikTok = event.platform === "tiktok" || String(comment.sourceId || "").startsWith("tiktok-euler:");
+  if (isTikTok) {
+    badge.textContent = event.creator ? `TikTok @${event.creator}` : "TikTok LIVE";
+  } else {
+    badge.textContent = event.liveVideoId ? `Live ${event.liveVideoId}` : "Facebook Live";
+  }
   meta.append(badge);
 
   const text = document.createElement("p");
-  text.textContent = comment.text;
+  text.textContent = isTikTok
+    ? `${comment.username || "TikTok viewer"}: ${comment.text || ""}`
+    : comment.text || "";
+
   const latency = document.createElement("small");
-  latency.textContent = `Graph → app: ${comment.observedLatencyMs} ms`;
+  const latencyMs = Number.isFinite(comment.observedLatencyMs) ? comment.observedLatencyMs : 0;
+  latency.textContent = `${isTikTok ? "TikTok" : "Graph"} → app: ${latencyMs} ms`;
 
   item.append(meta, text, latency);
   recentElement.prepend(item);
@@ -253,15 +309,29 @@ function addRecent(comment, liveVideoId) {
 
 function applySnapshot(snapshot) {
   applyLiveState(snapshot);
+  tiktokConfigured = Boolean(snapshot.tiktokConfigured);
+  applyTikTokState(snapshot);
+
   if (!snapshot.facebookConfigured) {
-    setStatus("Server chưa có FACEBOOK_PAGE_ACCESS_TOKEN / FACEBOOK_GRAPH_API_VERSION.", "error");
+    setStatus("Server chưa có cấu hình Facebook Graph API.", "error");
   } else if (activeLiveIds.length > 0) {
     setStatus(`Đang theo dõi ${activeLiveIds.length} Facebook Live.`);
   } else if (pendingCount > 0) {
     setStatus(`Đang kết nối ${pendingCount} Facebook Live…`);
   } else {
-    setStatus("Server đã cấu hình. Chưa kết nối live.");
+    setStatus("Facebook đã cấu hình. Chưa kết nối live.");
   }
+
+  if (!tiktokConfigured) {
+    setTikTokStatus("Server chưa cấu hình TikTok provider.", "error");
+  } else if (tiktokActive && tiktokCreator) {
+    setTikTokStatus(`Đang theo dõi TikTok @${tiktokCreator}.`);
+  } else if (tiktokConnecting && tiktokCreator) {
+    setTikTokStatus(`Đang kết nối TikTok @${tiktokCreator}…`);
+  } else {
+    setTikTokStatus("TikTok provider đã cấu hình. Chưa kết nối live.");
+  }
+
   ttsPaused = Boolean(snapshot.ttsPaused ?? snapshot.paused);
   toggleTtsButton.textContent = ttsPaused ? "Tiếp tục" : "Tạm dừng";
   queueSummary.textContent = `Queue: ${snapshot.queueSize || 0}`;
@@ -326,6 +396,34 @@ stopAllButton.addEventListener("click", async () => {
   }
 });
 
+tiktokStartButton.addEventListener("click", async () => {
+  const creator = tiktokInput.value.trim();
+  if (!creator) {
+    setTikTokStatus("Nhập TikTok creator hoặc LIVE URL trước.", "error");
+    return;
+  }
+  try {
+    tiktokStartButton.disabled = true;
+    await startTikTok(creator);
+    tiktokInput.value = "";
+  } catch (error) {
+    setTikTokStatus(error instanceof Error ? error.message : "Không thể kết nối TikTok LIVE", "error");
+  } finally {
+    renderTikTokState();
+  }
+});
+
+tiktokStopButton.addEventListener("click", async () => {
+  try {
+    tiktokStopButton.disabled = true;
+    await stopTikTok();
+  } catch (error) {
+    setTikTokStatus(error instanceof Error ? error.message : "Không thể dừng TikTok LIVE", "error");
+  } finally {
+    renderTikTokState();
+  }
+});
+
 toggleTtsButton.addEventListener("click", async () => {
   try {
     await unlockAudio();
@@ -358,26 +456,43 @@ events.onmessage = (message) => {
     applySnapshot(event);
   } else if (event.type === "lives") {
     applyLiveState(event);
+  } else if (event.type === "tiktok") {
+    applyTikTokState(event);
   } else if (event.type === "status") {
-    const prefix = event.liveVideoId ? `Live ${event.liveVideoId}: ` : "";
-    setStatus(`${prefix}${event.message || ""}`, event.level || "info");
+    if (event.platform === "tiktok") {
+      const prefix = event.creator ? `TikTok @${event.creator}: ` : "";
+      setTikTokStatus(`${prefix}${event.message || ""}`, event.level || "info");
+    } else {
+      const prefix = event.liveVideoId ? `Live ${event.liveVideoId}: ` : "";
+      setStatus(`${prefix}${event.message || ""}`, event.level || "info");
+    }
   } else if (event.type === "comment") {
-    addRecent(event.comment, event.liveVideoId);
+    addRecent(event.comment, event);
   } else if (event.type === "queue") {
     ttsPaused = Boolean(event.paused);
     toggleTtsButton.textContent = ttsPaused ? "Tiếp tục" : "Tạm dừng";
     queueSummary.textContent = `Queue: ${event.size || 0}`;
-    currentElement.textContent = event.current
-      ? event.current.text
-      : "Chưa có comment đang đọc.";
+    if (event.current) {
+      const isTikTok = String(event.current.sourceId || "").startsWith("tiktok-euler:");
+      currentElement.textContent = isTikTok
+        ? `${event.current.username || "TikTok viewer"}: ${event.current.text || ""}`
+        : event.current.text || "";
+    } else {
+      currentElement.textContent = "Chưa có comment đang đọc.";
+    }
   } else if (event.type === "playback") {
     void playAudioEvent(event);
   }
 };
 events.onerror = () => {
-  setStatus("Mất kết nối realtime với server; trình duyệt đang tự reconnect…", "error");
+  const message = "Mất kết nối realtime với server; trình duyệt đang tự reconnect…";
+  setStatus(message, "error");
+  setTikTokStatus(message, "error");
 };
 
 getJson("/api/status")
   .then(applySnapshot)
-  .catch(() => setStatus("Không đọc được trạng thái server.", "error"));
+  .catch(() => {
+    setStatus("Không đọc được trạng thái server.", "error");
+    setTikTokStatus("Không đọc được trạng thái server.", "error");
+  });
