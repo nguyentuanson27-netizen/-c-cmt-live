@@ -106,6 +106,10 @@ Do not introduce a generic framework or global event bus for nine sessions.
 13. Typecheck, full tests and build pass on Ubuntu + Windows.
 14. Real runtime evidence proves two Facebook Lives can feed the same sequential TTS queue.
 
+## Merge gate
+
+The PR must remain **Draft** until success criterion 14 is proven with a real two-live run and the evidence is recorded in `tasks/capture-findings.md`. Automated tests do not substitute for this gate.
+
 ## Open questions
 
 None blocking for implementation. Auto-discovery, per-live voices and >9 sessions remain explicitly deferred. Real two-live runtime verification remains the merge gate.
