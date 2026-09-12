@@ -95,4 +95,35 @@ describe("Facebook Page live discovery", () => {
       expect(result.error).not.toContain("DO_NOT_EXPOSE");
     }
   });
+
+  it("rejects a malformed successful Graph envelope instead of reporting a false empty result", async () => {
+    const fetchFn = vi.fn<GraphFetch>().mockResolvedValue(jsonResponse({ unexpected: true }));
+
+    const result = await discoverFacebookLiveVideos(
+      { token: "TOKEN", apiVersion: "v99.0" },
+      { fetchFn },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Facebook Graph live discovery returned an invalid response",
+    });
+  });
+
+  it("redacts the token before bounding network error text", async () => {
+    const token = "S".repeat(400);
+    const fetchFn = vi.fn<GraphFetch>().mockRejectedValue(new Error(`request failed: ${token}`));
+
+    const result = await discoverFacebookLiveVideos(
+      { token, apiVersion: "v99.0" },
+      { fetchFn },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("[REDACTED]");
+      expect(result.error).not.toContain("S".repeat(100));
+      expect(result.error.length).toBeLessThanOrEqual(360);
+    }
+  });
 });
