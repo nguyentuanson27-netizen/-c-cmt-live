@@ -1,6 +1,9 @@
 const liveInput = document.querySelector("#live-input");
 const startButton = document.querySelector("#start");
+const discoverButton = document.querySelector("#discover-lives");
 const stopAllButton = document.querySelector("#stop-all");
+const discoveredLivesElement = document.querySelector("#discovered-lives");
+const discoverySummary = document.querySelector("#discovery-summary");
 const activeLivesElement = document.querySelector("#active-lives");
 const liveSummary = document.querySelector("#live-summary");
 const toggleTtsButton = document.querySelector("#toggle-tts");
@@ -13,6 +16,7 @@ const recentElement = document.querySelector("#recent");
 let audioContext = null;
 let ttsPaused = false;
 let activeLiveIds = [];
+let discoveredLives = [];
 let pendingCount = 0;
 let maxLives = 9;
 
@@ -21,17 +25,28 @@ function setStatus(message, level = "info") {
   statusElement.dataset.level = level;
 }
 
+async function readJsonResponse(response) {
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+async function getJson(path) {
+  const response = await fetch(path, {
+    headers: { accept: "application/json" },
+  });
+  return readJsonResponse(response);
+}
+
 async function postJson(path, body = {}) {
   const response = await fetch(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.error || `HTTP ${response.status}`);
-  }
-  return payload;
+  return readJsonResponse(response);
 }
 
 async function unlockAudio() {
@@ -84,6 +99,14 @@ async function playAudioEvent(event) {
   }
 }
 
+async function startLive(liveVideoIdOrUrl) {
+  await unlockAudio();
+  const result = await postJson("/api/facebook/start", { liveVideoIdOrUrl });
+  applyLiveState(result);
+  setStatus(`Đã baseline Live ${result.liveVideoId}. Chờ comment mới…`);
+  return result;
+}
+
 async function stopLive(liveVideoId) {
   try {
     const result = await postJson("/api/facebook/stop", { liveVideoId });
@@ -91,6 +114,55 @@ async function stopLive(liveVideoId) {
     setStatus(`Đã dừng Live ${liveVideoId}.`);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : `Không thể dừng Live ${liveVideoId}`, "error");
+  }
+}
+
+function renderDiscoveredLives() {
+  discoveredLivesElement.replaceChildren();
+  discoverySummary.textContent = `${discoveredLives.length} live`;
+
+  if (discoveredLives.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "live-empty";
+    empty.textContent = "Không tìm thấy live đang phát.";
+    discoveredLivesElement.append(empty);
+    return;
+  }
+
+  for (const live of discoveredLives) {
+    const item = document.createElement("li");
+    item.className = "live-row";
+
+    const label = document.createElement("span");
+    const details = [];
+    if (typeof live.title === "string" && live.title) {
+      details.push(live.title);
+    }
+    details.push(`Live ${live.id}`);
+    if (typeof live.status === "string" && live.status) {
+      details.push(live.status);
+    }
+    label.textContent = details.join(" · ");
+
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.className = "secondary small";
+    const alreadyActive = activeLiveIds.includes(live.id);
+    addButton.textContent = alreadyActive ? "Đã thêm" : "Thêm";
+    addButton.disabled = alreadyActive;
+    addButton.addEventListener("click", () => {
+      addButton.disabled = true;
+      void startLive(live.id)
+        .catch((error) => {
+          setStatus(error instanceof Error ? error.message : `Không thể thêm Live ${live.id}`, "error");
+        })
+        .finally(() => {
+          renderDiscoveredLives();
+        });
+    });
+
+    item.append(label, addButton);
+    discoveredLivesElement.append(item);
   }
 }
 
@@ -137,6 +209,7 @@ function applyLiveState(state) {
   pendingCount = Number.isFinite(state.pendingCount) ? Math.max(0, state.pendingCount) : 0;
   maxLives = Number.isFinite(state.maxLives) ? Math.max(1, state.maxLives) : 9;
   renderLives();
+  renderDiscoveredLives();
 }
 
 function addRecent(comment, liveVideoId) {
@@ -183,16 +256,39 @@ startButton.addEventListener("click", async () => {
     return;
   }
   try {
-    await unlockAudio();
     startButton.disabled = true;
-    const result = await postJson("/api/facebook/start", { liveVideoIdOrUrl });
-    applyLiveState(result);
+    await startLive(liveVideoIdOrUrl);
     liveInput.value = "";
-    setStatus(`Đã baseline Live ${result.liveVideoId}. Chờ comment mới…`);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Không thể kết nối Facebook Graph API", "error");
   } finally {
     startButton.disabled = false;
+  }
+});
+
+discoverButton.addEventListener("click", async () => {
+  try {
+    discoverButton.disabled = true;
+    discoverySummary.textContent = "Đang tìm…";
+    const result = await getJson("/api/facebook/live-videos");
+    discoveredLives = Array.isArray(result.lives)
+      ? result.lives.filter(
+          (live) => live && typeof live === "object" && typeof live.id === "string" && /^\d+$/.test(live.id),
+        )
+      : [];
+    renderDiscoveredLives();
+    setStatus(
+      discoveredLives.length > 0
+        ? `Tìm thấy ${discoveredLives.length} Facebook Live đang phát.`
+        : "Không tìm thấy Facebook Live đang phát.",
+    );
+  } catch (error) {
+    discoveredLives = [];
+    renderDiscoveredLives();
+    discoverySummary.textContent = "Lỗi";
+    setStatus(error instanceof Error ? error.message : "Không thể tìm Facebook Live", "error");
+  } finally {
+    discoverButton.disabled = false;
   }
 });
 
@@ -261,7 +357,6 @@ events.onerror = () => {
   setStatus("Mất kết nối realtime với server; trình duyệt đang tự reconnect…", "error");
 };
 
-fetch("/api/status")
-  .then((response) => response.json())
+getJson("/api/status")
   .then(applySnapshot)
   .catch(() => setStatus("Không đọc được trạng thái server.", "error"));
