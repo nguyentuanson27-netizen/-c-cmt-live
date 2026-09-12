@@ -66,7 +66,7 @@ function events() {
 }
 
 describe("FacebookLiveManager", () => {
-  it("runs independent live sessions and stops only the requested live", async () => {
+  it("runs independent live sessions and makes repeated stop a no-op for other lives", async () => {
     const pollers: FakePoller[] = [];
     const manager = new FacebookLiveManager({
       pollerFactory: () => {
@@ -82,6 +82,7 @@ describe("FacebookLiveManager", () => {
     expect(manager.activeLiveIds).toEqual(["111", "222"]);
 
     expect(manager.stopLive("111")).toBe(true);
+    expect(manager.stopLive("111")).toBe(false);
     expect(pollers[0].stopped).toBe(true);
     expect(pollers[1].stopped).toBe(false);
     expect(manager.activeLiveIds).toEqual(["222"]);
