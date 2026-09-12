@@ -73,11 +73,12 @@ function normalizeLive(value: unknown): FacebookDiscoveredLive | null {
 }
 
 function sanitizeGraphMessage(value: unknown, token: string): string {
-  const message = boundedString(value, MAX_ERROR_LENGTH) ?? "Facebook Graph API error";
-  if (!token) {
-    return message;
+  const raw = typeof value === "string" ? value.trim() : "";
+  let message = raw || "Facebook Graph API error";
+  if (token) {
+    message = message.split(token).join("[REDACTED]");
   }
-  return message.split(token).join("[REDACTED]");
+  return message.slice(0, MAX_ERROR_LENGTH);
 }
 
 export async function discoverFacebookLiveVideos(
@@ -137,9 +138,12 @@ export async function discoverFacebookLiveVideos(
       return { ok: false, error: `Facebook Graph live discovery failed: HTTP ${response.status}` };
     }
 
-    const rawLives = Array.isArray(payload.data) ? payload.data : [];
+    if (!Array.isArray(payload.data)) {
+      return { ok: false, error: "Facebook Graph live discovery returned an invalid response" };
+    }
+
     const lives: FacebookDiscoveredLive[] = [];
-    for (const rawLive of rawLives) {
+    for (const rawLive of payload.data) {
       const live = normalizeLive(rawLive);
       if (!live) {
         continue;
