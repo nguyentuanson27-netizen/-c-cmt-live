@@ -84,6 +84,23 @@ describe("TikTok Euler session lifecycle", () => {
     expect(h.session.connectingCreator).toBeNull();
   });
 
+  it("fails a silent initial connection after a bounded timeout", async () => {
+    const h = makeHarness();
+    const start = h.session.start({ creator: "alice", apiKey: "secret" }, h.events);
+    const connectTimeout = h.timers.find((timer) => timer.delay === 20_000);
+
+    expect(connectTimeout).toBeDefined();
+    connectTimeout?.callback();
+
+    await expect(start).resolves.toEqual({
+      ok: false,
+      error: expect.stringMatching(/timed out/i),
+    });
+    expect(h.session.activeCreator).toBeNull();
+    expect(h.session.connectingCreator).toBeNull();
+    expect(h.sockets[0].closeCalls).toEqual([{ code: 1000, reason: "Connect timeout" }]);
+  });
+
   it("emits comments only from the current generation and stop is idempotent", async () => {
     const h = makeHarness();
     const start = h.session.start({ creator: "alice", apiKey: "secret" }, h.events);
@@ -150,7 +167,7 @@ describe("TikTok Euler session lifecycle", () => {
     }
 
     h.sockets[5].emit("close", { code: 1011, reason: "still failing" });
-    expect(h.timers).toHaveLength(5);
+    expect(h.timers.filter((timer) => expectedDelays.includes(timer.delay))).toHaveLength(5);
     expect(h.session.activeCreator).toBeNull();
   });
 
