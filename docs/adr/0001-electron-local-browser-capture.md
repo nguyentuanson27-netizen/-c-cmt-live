@@ -1,8 +1,10 @@
 # ADR 0001 — Electron local browser capture for MVP
 
-**Status:** Accepted
+**Status:** Superseded by ADR 0002
 
 **Date:** 2026-09-10
+
+**Superseded:** 2026-09-12, after the Facebook Graph web runtime and 2–9 multi-live path were runtime-verified. The Electron implementation was then removed in the focused cleanup tracked by `docs/specs/remove-legacy-electron.md`. This ADR is retained as architectural history, not current implementation guidance.
 
 ## Context
 
