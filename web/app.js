@@ -1,6 +1,8 @@
 const liveInput = document.querySelector("#live-input");
 const startButton = document.querySelector("#start");
-const stopButton = document.querySelector("#stop");
+const stopAllButton = document.querySelector("#stop-all");
+const activeLivesElement = document.querySelector("#active-lives");
+const liveSummary = document.querySelector("#live-summary");
 const toggleTtsButton = document.querySelector("#toggle-tts");
 const clearQueueButton = document.querySelector("#clear-queue");
 const statusElement = document.querySelector("#status");
@@ -10,6 +12,9 @@ const recentElement = document.querySelector("#recent");
 
 let audioContext = null;
 let ttsPaused = false;
+let activeLiveIds = [];
+let pendingCount = 0;
+let maxLives = 9;
 
 function setStatus(message, level = "info") {
   statusElement.textContent = message;
@@ -79,16 +84,69 @@ async function playAudioEvent(event) {
   }
 }
 
-function addRecent(comment) {
+async function stopLive(liveVideoId) {
+  try {
+    const result = await postJson("/api/facebook/stop", { liveVideoId });
+    applyLiveState(result);
+    setStatus(`Đã dừng Live ${liveVideoId}.`);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : `Không thể dừng Live ${liveVideoId}`, "error");
+  }
+}
+
+function renderLives() {
+  liveSummary.textContent = `${activeLiveIds.length}/${maxLives} live${pendingCount ? ` · ${pendingCount} đang kết nối` : ""}`;
+  stopAllButton.disabled = activeLiveIds.length === 0 && pendingCount === 0;
+  activeLivesElement.replaceChildren();
+
+  if (activeLiveIds.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "live-empty";
+    empty.textContent = pendingCount > 0 ? "Đang kết nối live…" : "Chưa có live đang theo dõi.";
+    activeLivesElement.append(empty);
+    return;
+  }
+
+  for (const liveVideoId of activeLiveIds) {
+    const item = document.createElement("li");
+    item.className = "live-row";
+
+    const label = document.createElement("span");
+    label.textContent = `Live ${liveVideoId}`;
+
+    const stopButton = document.createElement("button");
+    stopButton.type = "button";
+    stopButton.className = "secondary small";
+    stopButton.textContent = "Dừng";
+    stopButton.addEventListener("click", () => {
+      stopButton.disabled = true;
+      void stopLive(liveVideoId).finally(() => {
+        stopButton.disabled = false;
+      });
+    });
+
+    item.append(label, stopButton);
+    activeLivesElement.append(item);
+  }
+}
+
+function applyLiveState(state) {
+  activeLiveIds = Array.isArray(state.activeLiveIds)
+    ? state.activeLiveIds.filter((value) => typeof value === "string")
+    : [];
+  pendingCount = Number.isFinite(state.pendingCount) ? Math.max(0, state.pendingCount) : 0;
+  maxLives = Number.isFinite(state.maxLives) ? Math.max(1, state.maxLives) : 9;
+  renderLives();
+}
+
+function addRecent(comment, liveVideoId) {
   const item = document.createElement("li");
   const meta = document.createElement("div");
   meta.className = "comment-meta";
   const badge = document.createElement("span");
   badge.className = "badge";
-  badge.textContent = comment.sourceLabel || "FB-API";
-  const author = document.createElement("strong");
-  author.textContent = comment.username;
-  meta.append(badge, author);
+  badge.textContent = liveVideoId ? `Live ${liveVideoId}` : "Facebook Live";
+  meta.append(badge);
 
   const text = document.createElement("p");
   text.textContent = comment.text;
@@ -103,10 +161,13 @@ function addRecent(comment) {
 }
 
 function applySnapshot(snapshot) {
+  applyLiveState(snapshot);
   if (!snapshot.facebookConfigured) {
     setStatus("Server chưa có FACEBOOK_PAGE_ACCESS_TOKEN / FACEBOOK_GRAPH_API_VERSION.", "error");
-  } else if (snapshot.active) {
-    setStatus(`Đang kết nối Live ${snapshot.liveVideoId}.`);
+  } else if (activeLiveIds.length > 0) {
+    setStatus(`Đang theo dõi ${activeLiveIds.length} Facebook Live.`);
+  } else if (pendingCount > 0) {
+    setStatus(`Đang kết nối ${pendingCount} Facebook Live…`);
   } else {
     setStatus("Server đã cấu hình. Chưa kết nối live.");
   }
@@ -125,6 +186,8 @@ startButton.addEventListener("click", async () => {
     await unlockAudio();
     startButton.disabled = true;
     const result = await postJson("/api/facebook/start", { liveVideoIdOrUrl });
+    applyLiveState(result);
+    liveInput.value = "";
     setStatus(`Đã baseline Live ${result.liveVideoId}. Chờ comment mới…`);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Không thể kết nối Facebook Graph API", "error");
@@ -133,12 +196,16 @@ startButton.addEventListener("click", async () => {
   }
 });
 
-stopButton.addEventListener("click", async () => {
+stopAllButton.addEventListener("click", async () => {
   try {
-    await postJson("/api/facebook/stop");
-    setStatus("Đã dừng lấy comment.");
+    stopAllButton.disabled = true;
+    const result = await postJson("/api/facebook/stop", {});
+    applyLiveState(result);
+    setStatus("Đã dừng tất cả Facebook Live.");
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : "Không thể dừng kết nối", "error");
+    setStatus(error instanceof Error ? error.message : "Không thể dừng các kết nối", "error");
+  } finally {
+    renderLives();
   }
 });
 
@@ -172,16 +239,19 @@ events.onmessage = (message) => {
 
   if (event.type === "snapshot") {
     applySnapshot(event);
+  } else if (event.type === "lives") {
+    applyLiveState(event);
   } else if (event.type === "status") {
-    setStatus(event.message || "", event.level || "info");
+    const prefix = event.liveVideoId ? `Live ${event.liveVideoId}: ` : "";
+    setStatus(`${prefix}${event.message || ""}`, event.level || "info");
   } else if (event.type === "comment") {
-    addRecent(event.comment);
+    addRecent(event.comment, event.liveVideoId);
   } else if (event.type === "queue") {
     ttsPaused = Boolean(event.paused);
     toggleTtsButton.textContent = ttsPaused ? "Tiếp tục" : "Tạm dừng";
     queueSummary.textContent = `Queue: ${event.size || 0}`;
     currentElement.textContent = event.current
-      ? `${event.current.username}: ${event.current.text}`
+      ? event.current.text
       : "Chưa có comment đang đọc.";
   } else if (event.type === "playback") {
     void playAudioEvent(event);
