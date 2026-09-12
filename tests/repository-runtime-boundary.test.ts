@@ -9,7 +9,7 @@ function readJson(path: string): Record<string, unknown> {
 }
 
 describe("repository runtime boundary", () => {
-  it("has no Electron dependency or Electron bootstrap step", () => {
+  it("has no Electron dependency, bootstrap step, or lockfile package", () => {
     const pkg = readJson("package.json");
     const lock = readJson("package-lock.json");
     const devDependencies = (pkg.devDependencies ?? {}) as Record<string, unknown>;
@@ -17,17 +17,21 @@ describe("repository runtime boundary", () => {
     const lockPackages = (lock.packages ?? {}) as Record<string, unknown>;
     const lockRoot = (lockPackages[""] ?? {}) as Record<string, unknown>;
     const lockDevDependencies = (lockRoot.devDependencies ?? {}) as Record<string, unknown>;
+    const electronLockEntries = Object.keys(lockPackages).filter(
+      (path) => path === "node_modules/electron" || path.includes("@electron"),
+    );
 
     expect(devDependencies).not.toHaveProperty("electron");
     expect(lockDevDependencies).not.toHaveProperty("electron");
-    expect(lockPackages).not.toHaveProperty("node_modules/electron");
+    expect(electronLockEntries).toEqual([]);
     expect(scripts).not.toHaveProperty("pretest");
+    expect(scripts).not.toHaveProperty("check:runtime-modules");
+    expect(String(scripts.build ?? "")).not.toContain("check:runtime-modules");
   });
 
   it("keeps only the active web runtime, not the legacy Electron harness", () => {
     const legacyPaths = [
       "src/main.ts",
-      "src/platform.ts",
       "src/connectors/facebook/preload.ts",
       "src/connectors/tiktok/preload.ts",
       "src/connectors/shopee/preload.ts",
@@ -39,6 +43,7 @@ describe("repository runtime boundary", () => {
       "public/index.html",
       "public/app.css",
       "public/bootstrap.js",
+      "scripts/check-runtime-modules.cjs",
       "tests/facebook-parser.test.ts",
       "tests/tiktok-parser.test.ts",
       "tests/ipc-security.test.ts",
@@ -53,6 +58,7 @@ describe("repository runtime boundary", () => {
       expect(existsSync(resolve(root, path)), `legacy path should be removed: ${path}`).toBe(false);
     }
 
+    expect(existsSync(resolve(root, "src/platform.ts"))).toBe(true);
     expect(existsSync(resolve(root, "src/server/main.ts"))).toBe(true);
     expect(existsSync(resolve(root, "web/index.html"))).toBe(true);
     expect(existsSync(resolve(root, "web/app.js"))).toBe(true);
