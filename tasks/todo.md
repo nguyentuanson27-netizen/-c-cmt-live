@@ -8,34 +8,37 @@
 - [x] Record multi-live spec and implementation plan.
 
 ## Task 1 — Multi-live lifecycle manager
-- [ ] RED tests for 2+ independent live sessions.
-- [ ] RED test for duplicate start isolation.
-- [ ] RED test for 9-live active+pending cap and concurrent-start race.
-- [ ] RED test that one live error/stop does not terminate another.
-- [ ] Implement `FacebookLiveManager` and make focused tests GREEN.
+- [x] RED tests for 2+ independent live sessions.
+- [x] RED test for duplicate start isolation.
+- [x] RED test for 9-live active+pending cap and concurrent-start race.
+- [x] RED test that one live error/stop does not terminate another.
+- [x] Regression coverage ensures inactive/error sessions leave manager state before status forwarding.
+- [x] Implement `FacebookLiveManager` and make focused tests GREEN.
 
 ## Task 2 — Queue/source isolation
-- [ ] Preserve distinct `facebook-graph:<liveVideoId>` source IDs.
-- [ ] Scope content dedup per live.
-- [ ] Add generic selective queue removal with tests.
-- [ ] Stop one live removes only its waiting queue items; adding a live does not clear the queue.
-- [ ] Stop-all clears all waiting queue items.
+- [x] Preserve distinct `facebook-graph:<liveVideoId>` source IDs.
+- [x] Scope content dedup per live.
+- [x] Add generic selective queue removal with tests.
+- [x] Stop one live removes only its waiting queue items; adding a live does not clear the queue.
+- [x] Repeated stop-one is a safe no-op and does not affect other lives.
+- [x] Stop-all clears all waiting queue items.
 
 ## Task 3 — HTTP/SSE/UI
-- [ ] Start endpoint adds a live without replacing existing lives.
-- [ ] Stop endpoint can stop one live or all lives.
-- [ ] Status/SSE expose active live IDs/count without secrets.
-- [ ] UI lists active live IDs with individual Stop buttons and Stop all.
-- [ ] Status/comment events identify source live.
-- [ ] Existing pause/resume/clear queue and single-browser playback ownership remain intact.
+- [x] Start endpoint adds a live without replacing existing lives.
+- [x] Stop endpoint can stop one live or all lives.
+- [x] Status/SSE expose active live IDs/count without secrets.
+- [x] UI lists active live IDs with individual Stop buttons and Stop all.
+- [x] Status/comment events identify source live.
+- [x] Recent/current UI uses comment content and Live ID rather than viewer-name dependence.
+- [x] Existing pause/resume/clear queue and single-browser playback ownership remain intact.
 
 ## Automated verification
-- [ ] `npm run typecheck` PASS.
-- [ ] `npm test` PASS.
-- [ ] `npm run build` PASS.
-- [ ] Ubuntu CI PASS on exact head.
-- [ ] Windows CI PASS on exact head.
-- [ ] Self-review has no Required findings.
+- [x] `npm run typecheck` PASS on implementation head.
+- [x] `npm test` PASS: 75/75 on implementation head.
+- [x] `npm run build` PASS, including `node --check web/app.js` and runtime-module guard.
+- [x] Ubuntu CI PASS on implementation head.
+- [x] Windows CI PASS on implementation head.
+- [x] Self-review completed: one Required idempotent-stop finding fixed; no remaining Required code findings.
 
 ## Runtime verification — merge gate
 - [ ] Two real Facebook Lives connected simultaneously.
