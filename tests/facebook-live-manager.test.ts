@@ -144,7 +144,7 @@ describe("FacebookLiveManager", () => {
     expect(manager.activeLiveIds).toEqual(["222"]);
   });
 
-  it("removes only a poller that becomes inactive after its own error status", async () => {
+  it("removes an inactive poller before forwarding its error status", async () => {
     const pollers: FakePoller[] = [];
     const manager = new FacebookLiveManager({
       pollerFactory: () => {
@@ -154,11 +154,18 @@ describe("FacebookLiveManager", () => {
       },
     });
     const callbacks = events();
+    let activeDuringError: string[] = [];
+    callbacks.onStatus.mockImplementation((_liveVideoId, _message, level) => {
+      if (level === "error") {
+        activeDuringError = manager.activeLiveIds;
+      }
+    });
 
     await manager.startLive(config("111"), callbacks);
     await manager.startLive(config("222"), callbacks);
     pollers[0].expire("token expired");
 
+    expect(activeDuringError).toEqual(["222"]);
     expect(manager.activeLiveIds).toEqual(["222"]);
     expect(callbacks.onStatus).toHaveBeenCalledWith("111", "token expired", "error");
   });
