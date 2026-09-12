@@ -1,132 +1,74 @@
 # Live Comment TTS
 
-Ứng dụng Windows nội bộ để đọc comment livestream bằng TTS tiếng Việt cho:
+Local web operator app that reads **managed Facebook Page Live comments** with Vietnamese Edge TTS.
 
-- Facebook Live
-- TikTok Live
-- Shopee Live (đang deferred)
+The active direction is now **Facebook Graph API + Node web server**, not Facebook DOM scraping/Electron. The previous Electron implementation remains in the repository temporarily as historical/rollback code until the Graph runtime passes a real-live verification gate.
 
-Mục tiêu của project là **chạy được, dễ sửa, không over-engineer**. Đây không phải SaaS và không xây backend/database nếu MVP chưa cần.
-
-## Trạng thái hiện tại
-
-Repository đã qua feasibility cho **Facebook + TikTok** và đang ở giai đoạn **core/TTS + platform integration**.
-
-Đã có:
-
-- Electron + TypeScript scaffold;
-- persistent browser session theo platform;
-- source BrowserWindow sandboxed, `nodeIntegration: false`, `contextIsolation: true`;
-- livestream audio bị mute;
-- platform URL allowlist và popup/navigation restrictions;
-- Facebook real-comment parser/capture đã có runtime evidence;
-- TikTok real-comment parser/capture đã có runtime evidence;
-- startup baseline theo DOM element + comment signature để comment đã có sẵn không bị coi là comment mới, đồng thời vẫn xử lý được node bị tái sử dụng hoặc render nội dung theo nhiều bước;
-- core normalize/filter/dedup/bounded FIFO queue + stale skip;
-- collision-safe core dedup key với sliding window;
-- `msedge-tts` với voice mặc định `vi-VN-HoaiMyNeural`;
-- sequential playback, retry một lần rồi skip khi lỗi;
-- TTS init lỗi sẽ reset client để lần retry thực sự tạo kết nối mới;
-- XML/SSML escaping cho untrusted comment text trước khi gửi vào TTS library;
-- playback-completion IPC kiểm tra sender, playback id và payload shape;
-- TTS status, pause/resume, clear queue và recent comment view;
-- recent comment UI nhận structured payload, không parse lại status string;
-- build-time runtime-module guard để renderer và sandboxed preloads không phát sinh unsupported `require(...)` sau `tsc`;
-- `package-lock.json`;
-- GitHub Actions CI chạy `npm ci` + typecheck + tests + build trên Windows và Ubuntu với Node 24.
-
-Chưa hoàn tất:
-
-- Facebook manager cho 1–9 live đồng thời;
-- Shopee real-comment capture/integration (deferred theo scope amendment ngày 2026-09-10);
-- local JSON config cho operator settings;
-- final Windows runtime verification/packaging.
-
-Shopee deferred **không block** shared core/TTS hoặc Facebook/TikTok work, nhưng full three-platform MVP chưa được coi là hoàn thành cho đến khi Shopee được prove và integrate end-to-end.
-
-## Tài liệu project
-
-| File | Mục đích |
-|---|---|
-| `AGENTS.md` | Quy tắc cho coding agent: scope, gates, security và verification honesty |
-| `docs/specs/live-comment-tts-mvp.md` | Product/technical contract và scope amendment hiện tại |
-| `docs/adr/0001-electron-local-browser-capture.md` | Lý do chọn Electron local + browser capture |
-| `docs/runbooks/feasibility-harness.md` | Hướng dẫn runtime capture verification |
-| `tasks/plan.md` | Implementation plan theo dependency/risk-first |
-| `tasks/todo.md` | Checklist trạng thái hiện tại |
-| `tasks/capture-findings.md` | Runtime evidence cho từng platform |
-
-## MVP contract
-
-### Facebook
-
-- 1 Facebook browser session;
-- tối đa 9 Facebook Live cùng lúc ở phase multi-live;
-- comment từ các live được gom vào 1 queue chung;
-- Page/source label chỉ dùng ở UI/log, không đọc bằng TTS.
-
-### TikTok
-
-- 1 account/session;
-- 1 live tại một thời điểm.
-
-### Shopee
-
-- 1 account/session;
-- 1 live tại một thời điểm;
-- capture/integration hiện deferred và sẽ được resume trước full three-platform completion.
-
-### Format TTS
+## Current architecture
 
 ```text
-Tên khách: nội dung comment
+Facebook Graph API
+      ↓ server-side Page Access Token
+FacebookGraphCommentPoller
+      ↓
+normalize → dedup (current live scope) → bounded FIFO queue
+      ↓
+msedge-tts (comment content only for FB-API)
+      ↓
+SSE audio event
+      ↓
+operator browser Web Audio playback
+      ↓ completion POST
+server advances queue
 ```
 
-Không đọc platform name hoặc Facebook Page name.
+The server binds to `127.0.0.1` by default. It intentionally refuses non-loopback hosts in this slice because public hosting would require a separate authentication/authorization design.
 
-## Architecture
+## Security boundary
+
+`FACEBOOK_PAGE_ACCESS_TOKEN` is a bearer secret and must stay server-side.
+
+The browser:
+- never asks for the Page token;
+- never stores it in localStorage/sessionStorage;
+- never receives it through API/SSE responses;
+- sends only a Facebook Live Video ID/URL and playback-control commands.
+
+Graph requests send the token in the `Authorization: Bearer ...` header, not the URL/query string.
+
+## Required server environment
+
+Set these before `npm run dev`:
 
 ```text
-Remote live page(s)
-      ↓
-platform preload/parser
-      ↓
-Comment
-      ↓
-normalize → dedup → filter → stale check
-      ↓
-bounded FIFO queue (max 30)
-      ↓
-Edge TTS
-      ↓
-local audio playback
+FACEBOOK_PAGE_ACCESS_TOKEN=<Page Access Token>
+FACEBOOK_GRAPH_API_VERSION=<explicit Meta Graph version, e.g. vXX.X after verifying your app/dashboard>
 ```
 
-MVP không dùng:
+No Graph version is guessed in code because Meta version support changes over time. Verify the version available to the actual Meta app before runtime testing.
 
-- backend server;
-- database;
-- Redis/message broker;
-- microservices;
-- Playwright/Puppeteer/Selenium;
-- generic plugin framework.
+Optional:
 
-## Tech stack
+```text
+HOST=127.0.0.1
+PORT=3000
+```
 
-- Electron `44.2.0`
-- TypeScript `7.0.2`
-- Vitest `5.0.0`
-- `msedge-tts` `2.0.7`
-- vanilla HTML/CSS/TypeScript
+Only loopback hosts are accepted by the current runtime.
 
-## Quick start
+### PowerShell example
 
-CI dùng Node.js 24. Dùng Node 24 cho development để khớp môi trường CI.
+```powershell
+$env:FACEBOOK_PAGE_ACCESS_TOKEN="<secret>"
+$env:FACEBOOK_GRAPH_API_VERSION="vXX.X"
+npm run dev
+```
+
+Then open `http://127.0.0.1:3000`.
+
+## Commands
 
 ```bash
-git clone https://github.com/nguyentuanson27-netizen/-c-cmt-live.git
-cd ./-c-cmt-live
-git checkout feat/mvp-live-comment-tts
 npm ci
 npm run typecheck
 npm test
@@ -134,156 +76,45 @@ npm run build
 npm run dev
 ```
 
-`npm run build` compile TypeScript rồi chạy `scripts/check-runtime-modules.cjs` trên emitted renderer/preload JavaScript. `npm run dev` build rồi mở Electron app.
+CI uses Node.js 24 and runs install + typecheck + tests + build on Ubuntu and Windows.
 
-## Capture behavior
+## What this PR proves
 
-Facebook và TikTok connector dùng DOM boundary đã được ghi lại trong `tasks/capture-findings.md`.
+The first Graph/web slice is deliberately single-live:
+- parse numeric Live Video IDs and Facebook video URLs;
+- baseline comments already present at connect time;
+- poll every ~1s;
+- paginate backwards until the previous boundary so a burst larger than one page is not silently lost;
+- abort/discard stale in-flight work on stop/restart;
+- normalize/filter/dedup/queue comments;
+- synthesize **comment content only** for the `FB-API` source; viewer names and the `Facebook viewer` fallback are not spoken;
+- when Meta omits commenter identity, content-based dedup is bypassed so two valid anonymous comments with the same text are not collapsed;
+- play one audio item at a time in the browser and acknowledge completion to advance the queue;
+- show recent comments and observed Graph→app latency.
 
-Khi connector khởi động, các comment element đang tồn tại và parse được sẽ được lưu với content signature nhưng **không emit** vào pipeline. Khi DOM thay đổi, connector re-check comment container gần mutation; cùng một element chỉ bị bỏ qua khi signature không đổi. Vì vậy comment được render theo nhiều bước hoặc virtualized node được tái sử dụng cho nội dung mới vẫn có thể emit. Content dedup giữa các element vẫn thuộc về core `CommentDedup` với sliding window.
+## Runtime merge gate
 
-Platform-specific selectors/network behavior vẫn phải được runtime-verify khi platform thay đổi; unit test không thay thế real-live verification.
+Automated tests are not enough for Meta integration. Before this PR is merge-ready, a real managed Facebook Page live must prove:
+- existing comments are not spoken after connect;
+- a new external-viewer marker comment returns the exact comment text; viewer username is intentionally not required for this product path;
+- two quick comments play sequentially without overlap;
+- observed comment latency is recorded;
+- browser storage/network URLs/log output contain no Page token.
 
-## Browser/session security
+Record evidence in `tasks/capture-findings.md`.
 
-Persistent partitions:
+## Deferred
 
-```text
-persist:facebook
-persist:tiktok
-persist:shopee
-```
+- Facebook 2→9 concurrent lives (after this single-live path is proven)
+- public deployment/authentication
+- Meta webhooks
+- TikTok/Shopee web ingestion strategy
+- removal of legacy Electron code (focused follow-up after runtime proof)
 
-Remote source windows giữ các boundary tối thiểu:
+## Docs
 
-```ts
-{
-  nodeIntegration: false,
-  contextIsolation: true,
-  sandbox: true,
-}
-```
-
-Ngoài ra source window:
-
-- chỉ nhận URL HTTPS thuộc domain platform tương ứng;
-- mute audio livestream;
-- deny permission requests theo policy hiện tại;
-- deny unexpected popup/new-window;
-- chặn navigation/redirect sang hostname ngoài platform;
-- remote preload chỉ gửi payload tối thiểu qua IPC;
-- sandboxed preload chỉ runtime-require `electron`; local helper imports phải được bundle trước khi dùng, và build guard hiện reject chúng.
-
-Main process validate sender/platform/URL/payload trước khi nhận comment. Playback completion từ renderer cũng validate sender, expected playback id và boolean `success` trước khi advance queue.
-
-Comment text là untrusted input. Spoken string vẫn có format `username: text`, nhưng XML-sensitive characters được escape ngay trước khi text được đưa vào SSML envelope của `msedge-tts`.
-
-## Project structure
-
-```text
-.
-├─ .github/workflows/ci.yml
-├─ AGENTS.md
-├─ README.md
-├─ docs/
-│  ├─ adr/0001-electron-local-browser-capture.md
-│  ├─ runbooks/feasibility-harness.md
-│  └─ specs/live-comment-tts-mvp.md
-├─ scripts/
-│  └─ check-runtime-modules.cjs
-├─ tasks/
-│  ├─ capture-findings.md
-│  ├─ plan.md
-│  └─ todo.md
-├─ public/
-│  ├─ bootstrap.js
-│  ├─ index.html
-│  └─ app.css
-├─ src/
-│  ├─ main.ts
-│  ├─ platform.ts
-│  ├─ core/
-│  │  ├─ comment.ts
-│  │  ├─ dedup.ts
-│  │  ├─ filter.ts
-│  │  └─ queue.ts
-│  ├─ security/
-│  │  ├─ ipc.ts
-│  │  └─ platform-url.ts
-│  ├─ tts/
-│  │  ├─ playback-manager.ts
-│  │  └─ tts-service.ts
-│  ├─ ui/
-│  │  ├─ preload.ts
-│  │  └─ renderer.ts
-│  ├─ windows/source-window.ts
-│  └─ connectors/
-│     ├─ facebook/preload.ts
-│     ├─ tiktok/preload.ts
-│     └─ shopee/preload.ts
-├─ tests/
-└─ package.json
-```
-
-## Implementation order
-
-```text
-repo/docs
-  ↓
-Electron feasibility harness
-  ↓
-Facebook + TikTok capture PASS
-  ↓
-CURRENT GATE
-  ↓
-core queue/filter/dedup
-  ↓
-TTS + secure sequential playback
-  ↓
-Facebook multi-live + TikTok final integration
-
-Shopee capture (deferred)
-  ↓
-Shopee final integration
-  ↓
-full three-platform Windows verification/package
-```
-
-Chi tiết xem `tasks/plan.md` và `tasks/todo.md`.
-
-## Verification status
-
-Runtime evidence hiện có trong repository:
-
-- Facebook real live capture: PASS;
-- TikTok real live capture: PASS;
-- Shopee capture: DEFERRED / chưa test.
-
-GitHub Actions CI verify `npm ci`, `npm run typecheck`, `npm test`, và `npm run build` trên Windows/Ubuntu. Build hiện bao gồm runtime-module boundary check trên emitted JavaScript. Mỗi thay đổi mới vẫn phải chờ CI của chính head đó trước khi coi repository checks là verified.
-
-Các mục vẫn cần runtime verification ở phase tiếp theo:
-
-- startup-baseline behavior trên real Facebook/TikTok live sau fix hiện tại;
-- sequential TTS playback trên fixed head;
-- Facebook 2 → 9 concurrent lives;
-- Shopee capture + end-to-end integration;
-- background/minimized source behavior;
-- final Windows packaging workflow.
-
-## Out of scope MVP
-
-- SaaS/cloud backend
-- app user accounts/multi-tenant
-- database/analytics history
-- AI classification/auto reply/order automation
-- OBS overlay
-- multiple TikTok lives
-- multiple Shopee lives
-- multiple Facebook browser accounts
-- multiple platform modes cùng lúc
-- CAPTCHA bypass/proxy rotation/bot evasion
-- official APIs trừ khi cần để unblock cách capture đơn giản nhất
-
-## Platform maintenance principle
-
-Platform-specific capture code phải nằm trong `src/connectors/<platform>/` càng nhiều càng tốt. Khi Facebook/TikTok/Shopee đổi DOM/network behavior, mục tiêu là sửa connector tương ứng thay vì sửa queue/TTS/core.
+- `docs/specs/facebook-graph-web-mvp.md` — current contract
+- `docs/adr/0002-web-graph-api-runtime.md` — architecture decision
+- `tasks/plan.md` — implementation plan
+- `tasks/todo.md` — execution status
+- `tasks/capture-findings.md` — runtime evidence

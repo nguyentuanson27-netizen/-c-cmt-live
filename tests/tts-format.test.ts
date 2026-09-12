@@ -20,6 +20,19 @@ describe("TTS text formatting", () => {
     expect(formatted).not.toContain("Page Bán Quần Áo");
   });
 
+  it("reads only comment content for the Facebook Graph web source", () => {
+    const comment: Comment = {
+      id: "c-graph",
+      platform: "facebook",
+      sourceId: "facebook-graph:live-1",
+      username: "Facebook viewer",
+      text: "chốt size M",
+      receivedAt: Date.now(),
+    };
+
+    expect(formatCommentForTTS(comment)).toBe("chốt size M");
+  });
+
   it("handles TikTok comment without platform prefix", () => {
     const comment: Comment = {
       id: "c2",

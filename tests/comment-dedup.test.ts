@@ -21,6 +21,14 @@ describe('comment deduplication', () => {
     expect(dedup.isDuplicate('Bob', 'giá bao nhiêu', now)).toBe(false);
   });
 
+  it('treats a literal Facebook viewer username like any other username', () => {
+    const dedup = new CommentDedup({ windowMs: 10000 });
+    const now = 100000;
+
+    dedup.record('Facebook viewer', 'chốt', now);
+    expect(dedup.isDuplicate('Facebook viewer', 'chốt', now + 1000)).toBe(true);
+  });
+
   it('allows same user to send different comments', () => {
     const dedup = new CommentDedup();
     const now = 100000;

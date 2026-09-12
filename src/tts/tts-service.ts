@@ -4,6 +4,9 @@ import type { Comment } from "../core/comment";
 export type EdgeTtsClient = Pick<MsEdgeTTS, "setMetadata" | "toStream">;
 
 export function formatCommentForTTS(comment: Comment): string {
+  if (comment.sourceId.startsWith("facebook-graph:")) {
+    return comment.text;
+  }
   return `${comment.username}: ${comment.text}`;
 }
 
@@ -63,13 +66,23 @@ export class TTSService {
   public async synthesize(text: string): Promise<Buffer> {
     await this.ensureInit();
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const resetClient = (): void => {
+        this.client = null;
+        this.initPromise = null;
+      };
+
       try {
         const { audioStream } = this.client!.toStream(escapeXmlForSsml(text));
         const chunks: Buffer[] = [];
 
         const timeout = setTimeout(() => {
+          resetClient();
           audioStream.destroy();
-          reject(new Error("TTS synthesis timed out after 10s"));
+          if (!settled) {
+            settled = true;
+            reject(new Error("TTS synthesis timed out after 10s"));
+          }
         }, 10_000);
 
         audioStream.on("data", (chunk: Buffer) => {
@@ -78,15 +91,26 @@ export class TTSService {
 
         audioStream.on("end", () => {
           clearTimeout(timeout);
-          resolve(Buffer.concat(chunks));
+          if (!settled) {
+            settled = true;
+            resolve(Buffer.concat(chunks));
+          }
         });
 
         audioStream.on("error", (err: Error) => {
           clearTimeout(timeout);
-          reject(err);
+          resetClient();
+          if (!settled) {
+            settled = true;
+            reject(err);
+          }
         });
       } catch (error) {
-        reject(error);
+        resetClient();
+        if (!settled) {
+          settled = true;
+          reject(error);
+        }
       }
     });
   }

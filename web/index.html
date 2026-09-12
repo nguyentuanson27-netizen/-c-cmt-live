@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live Comment TTS — Facebook Graph</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow">LOCAL WEB RUNTIME</p>
+        <h1>Facebook Live Comment TTS</h1>
+        <p class="lead">Graph API → queue → Edge TTS. Không đọc DOM Facebook và không lưu Page token trong trình duyệt.</p>
+      </header>
+
+      <section class="card" aria-labelledby="connection-heading">
+        <h2 id="connection-heading">Kết nối Facebook Live</h2>
+        <label for="live-input">Live Video ID hoặc URL Facebook</label>
+        <input id="live-input" type="text" autocomplete="off" placeholder="1234567890 hoặc https://facebook.com/.../videos/..." />
+        <div class="actions">
+          <button id="start" type="button">Bắt đầu đọc</button>
+          <button id="stop" type="button" class="secondary">Dừng</button>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite">Đang kiểm tra cấu hình server…</p>
+        <p class="hint">Page Access Token và Graph API version được cấu hình ở server environment, không nhập tại đây.</p>
+      </section>
+
+      <section class="card" aria-labelledby="tts-heading">
+        <div class="section-row">
+          <div>
+            <h2 id="tts-heading">TTS</h2>
+            <p id="queue-summary" class="muted">Queue: 0</p>
+          </div>
+          <div class="actions compact">
+            <button id="toggle-tts" type="button" class="secondary">Tạm dừng</button>
+            <button id="clear-queue" type="button" class="secondary">Xóa queue</button>
+          </div>
+        </div>
+        <div id="current" class="current">Chưa đọc comment nào.</div>
+      </section>
+
+      <section class="card" aria-labelledby="recent-heading">
+        <h2 id="recent-heading">Bình luận gần nhất</h2>
+        <ol id="recent" class="recent" aria-live="polite"></ol>
+      </section>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
