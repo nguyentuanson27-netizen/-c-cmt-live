@@ -25,7 +25,7 @@ describe("Facebook Graph web connector", () => {
     expect(extractFacebookLiveVideoId("https://facebook.com/example/posts/998877665544332")).toBeNull();
   });
 
-  it("sends the Page token only in the Authorization header and requests no commenter identity", async () => {
+  it("sends the Page token only in the Authorization header", async () => {
     const fetchFn = vi.fn<GraphFetch>().mockResolvedValue(
       jsonResponse({ data: [], paging: { cursors: {} } }),
     );
@@ -44,15 +44,12 @@ describe("Facebook Graph web connector", () => {
     expect(result.ok).toBe(true);
     expect(fetchFn).toHaveBeenCalledTimes(1);
     const [url, init] = fetchFn.mock.calls[0];
-    const requestUrl = new URL(String(url));
     expect(String(url)).not.toContain("SECRET_PAGE_TOKEN");
-    expect(requestUrl.searchParams.get("fields")).toBe("id,message,created_time");
-    expect(requestUrl.searchParams.get("fields")).not.toContain("from");
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer SECRET_PAGE_TOKEN");
     poller.stop();
   });
 
-  it("baselines existing comments and emits only comment content received after connect", async () => {
+  it("baselines existing comments and emits only comments received after connect", async () => {
     const fetchFn = vi
       .fn<GraphFetch>()
       .mockResolvedValueOnce(
@@ -83,12 +80,48 @@ describe("Facebook Graph web connector", () => {
     await poller.pollNow();
 
     expect(onComment).toHaveBeenCalledTimes(1);
-    expect(onComment).toHaveBeenCalledWith({
-      id: "new-1",
-      text: "hello live",
-      createdTime: "2026-09-11T10:00:03Z",
-      timestamp: Date.parse("2026-09-11T10:00:03Z"),
-    });
+    expect(onComment).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "new-1", username: "Viewer", text: "hello live" }),
+    );
+    poller.stop();
+  });
+
+  it("uses the Graph comment id as opaque identity when commenter identity is unavailable", async () => {
+    const fetchFn = vi
+      .fn<GraphFetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [{ id: "boundary", message: "before", created_time: "2026-09-11T10:00:00Z" }],
+          paging: { cursors: {} },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [
+            { id: "anon-2", message: "chốt", created_time: "2026-09-11T10:00:02Z" },
+            { id: "anon-1", message: "chốt", created_time: "2026-09-11T10:00:01Z" },
+            { id: "boundary", message: "before", created_time: "2026-09-11T10:00:00Z" },
+          ],
+          paging: { cursors: {} },
+        }),
+      );
+    const onComment = vi.fn();
+    const poller = new FacebookGraphCommentPoller({ fetchFn });
+
+    await poller.start(
+      { token: "TOKEN", apiVersion: "v99.0", liveVideoIdOrUrl: "1234567890", pollIntervalMs: 60_000 },
+      { onComment, onStatus: vi.fn() },
+    );
+    await poller.pollNow();
+
+    expect(onComment).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: "anon-1", username: "comment:anon-1", text: "chốt" }),
+    );
+    expect(onComment).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: "anon-2", username: "comment:anon-2", text: "chốt" }),
+    );
     poller.stop();
   });
 
@@ -96,13 +129,13 @@ describe("Facebook Graph web connector", () => {
     const fetchFn = vi
       .fn<GraphFetch>()
       .mockResolvedValueOnce(
-        jsonResponse({ data: [{ id: "boundary", message: "before", created_time: "2026-09-11T10:00:00Z" }], paging: { cursors: {} } }),
+        jsonResponse({ data: [{ id: "boundary", from: { name: "Before" }, message: "before", created_time: "2026-09-11T10:00:00Z" }], paging: { cursors: {} } }),
       )
       .mockResolvedValueOnce(
         jsonResponse({
           data: [
-            { id: "new-4", message: "4", created_time: "2026-09-11T10:00:04Z" },
-            { id: "new-3", message: "3", created_time: "2026-09-11T10:00:03Z" },
+            { id: "new-4", from: { name: "D" }, message: "4", created_time: "2026-09-11T10:00:04Z" },
+            { id: "new-3", from: { name: "C" }, message: "3", created_time: "2026-09-11T10:00:03Z" },
           ],
           paging: { cursors: { after: "cursor-1" } },
         }),
@@ -110,9 +143,9 @@ describe("Facebook Graph web connector", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           data: [
-            { id: "new-2", message: "2", created_time: "2026-09-11T10:00:02Z" },
-            { id: "new-1", message: "1", created_time: "2026-09-11T10:00:01Z" },
-            { id: "boundary", message: "before", created_time: "2026-09-11T10:00:00Z" },
+            { id: "new-2", from: { name: "B" }, message: "2", created_time: "2026-09-11T10:00:02Z" },
+            { id: "new-1", from: { name: "A" }, message: "1", created_time: "2026-09-11T10:00:01Z" },
+            { id: "boundary", from: { name: "Before" }, message: "before", created_time: "2026-09-11T10:00:00Z" },
           ],
           paging: { cursors: {} },
         }),
@@ -140,7 +173,7 @@ describe("Facebook Graph web connector", () => {
       .fn<GraphFetch>()
       .mockImplementationOnce(() => firstResponse)
       .mockResolvedValueOnce(
-        jsonResponse({ data: [{ id: "b-boundary", message: "baseline B", created_time: "2026-09-11T10:00:00Z" }], paging: { cursors: {} } }),
+        jsonResponse({ data: [{ id: "b-boundary", from: { name: "B" }, message: "baseline B", created_time: "2026-09-11T10:00:00Z" }], paging: { cursors: {} } }),
       );
     const onCommentA = vi.fn();
     const onCommentB = vi.fn();
@@ -156,7 +189,7 @@ describe("Facebook Graph web connector", () => {
     );
 
     resolveFirst(
-      jsonResponse({ data: [{ id: "a-old", message: "stale A", created_time: "2026-09-11T09:59:59Z" }], paging: { cursors: {} } }),
+      jsonResponse({ data: [{ id: "a-old", from: { name: "A" }, message: "stale A", created_time: "2026-09-11T09:59:59Z" }], paging: { cursors: {} } }),
     );
     await Promise.all([startA, startB]);
 
@@ -172,7 +205,7 @@ describe("Facebook Graph web connector", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           data: [
-            { id: "a-boundary", message: "baseline A", created_time: "2026-09-11T10:00:00Z" },
+            { id: "a-boundary", from: { name: "A" }, message: "baseline A", created_time: "2026-09-11T10:00:00Z" },
           ],
           paging: { cursors: {} },
         }),
@@ -183,8 +216,8 @@ describe("Facebook Graph web connector", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           data: [
-            { id: "a-new", message: "still live", created_time: "2026-09-11T10:00:01Z" },
-            { id: "a-boundary", message: "baseline A", created_time: "2026-09-11T10:00:00Z" },
+            { id: "a-new", from: { name: "Viewer A" }, message: "still live", created_time: "2026-09-11T10:00:01Z" },
+            { id: "a-boundary", from: { name: "A" }, message: "baseline A", created_time: "2026-09-11T10:00:00Z" },
           ],
           paging: { cursors: {} },
         }),
@@ -208,12 +241,9 @@ describe("Facebook Graph web connector", () => {
     expect(poller.activeLiveVideoId).toBe("111");
 
     await poller.pollNow();
-    expect(onCommentA).toHaveBeenCalledWith({
-      id: "a-new",
-      text: "still live",
-      createdTime: "2026-09-11T10:00:01Z",
-      timestamp: Date.parse("2026-09-11T10:00:01Z"),
-    });
+    expect(onCommentA).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a-new", username: "Viewer A", text: "still live" }),
+    );
     poller.stop();
   });
 
