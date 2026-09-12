@@ -48,7 +48,7 @@
 - [ ] Shared TTS is sequential and speaks comment content only.
 - [ ] Stop Live A leaves Live B active and still receiving comments.
 - [ ] Page token absent from browser storage/URLs/SSE/logs.
-- [ ] Record Graph→app latency for both sources in `tasks/capture-findings.md`.
+- [ ] Record Graph→app latency for both sources in `tasks/capture-findings.md`; no PR #5 multi-live runtime evidence has been recorded yet.
 
 ## Deferred
 - [ ] More than 9 concurrent Facebook Lives.
