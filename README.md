@@ -13,7 +13,7 @@ FacebookGraphCommentPoller
       ↓
 normalize → dedup (current live scope) → bounded FIFO queue
       ↓
-msedge-tts
+msedge-tts (comment content only for FB-API)
       ↓
 SSE audio event
       ↓
@@ -87,7 +87,8 @@ The first Graph/web slice is deliberately single-live:
 - paginate backwards until the previous boundary so a burst larger than one page is not silently lost;
 - abort/discard stale in-flight work on stop/restart;
 - normalize/filter/dedup/queue comments;
-- synthesize exact `username: comment` speech with existing Edge TTS;
+- synthesize **comment content only** for the `FB-API` source; viewer names and the `Facebook viewer` fallback are not spoken;
+- when Meta omits commenter identity, content-based dedup is bypassed so two valid anonymous comments with the same text are not collapsed;
 - play one audio item at a time in the browser and acknowledge completion to advance the queue;
 - show recent comments and observed Graph→app latency.
 
@@ -95,7 +96,7 @@ The first Graph/web slice is deliberately single-live:
 
 Automated tests are not enough for Meta integration. Before this PR is merge-ready, a real managed Facebook Page live must prove:
 - existing comments are not spoken after connect;
-- a new marker comment returns the expected viewer username + exact text;
+- a new external-viewer marker comment returns the exact comment text; viewer username is intentionally not required for this product path;
 - two quick comments play sequentially without overlap;
 - observed comment latency is recorded;
 - browser storage/network URLs/log output contain no Page token.
