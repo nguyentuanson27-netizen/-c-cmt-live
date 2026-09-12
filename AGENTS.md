@@ -1,72 +1,60 @@
 # AGENTS.md
 
-This repository is an internal Windows MVP for reading livestream comments aloud from Facebook Live, TikTok Live, and Shopee Live.
+This repository is a **local web operator app** for reading managed Facebook Page Live comments aloud with Vietnamese TTS.
+
+The current runtime is **Node.js + Facebook Graph API + browser UI**. Electron/browser-DOM capture is historical only and must not be reintroduced as an active Facebook path.
 
 ## Source of truth
 
 Read these before changing code:
 
-1. `docs/specs/live-comment-tts-mvp.md` — approved product/technical contract.
-2. `tasks/plan.md` — ordered implementation plan and gates.
-3. `tasks/todo.md` — current execution status.
-4. `docs/runbooks/feasibility-harness.md` — manual runtime procedure for the platform capture spikes.
-5. `tasks/capture-findings.md` — record runtime evidence here.
-6. `docs/adr/0001-electron-local-browser-capture.md` — architecture rationale.
+1. `docs/specs/facebook-graph-multi-live.md` — current 2–9 Facebook Live contract.
+2. `docs/specs/facebook-graph-web-mvp.md` — single-live Graph foundations and security boundary.
+3. `docs/adr/0002-web-graph-api-runtime.md` — current architecture decision.
+4. `README.md` — operator setup and current runtime behavior.
+5. `tasks/plan.md` / `tasks/todo.md` — current work only.
+6. `tasks/capture-findings.md` — recorded runtime evidence.
+7. `docs/adr/0001-electron-local-browser-capture.md` — superseded history; not implementation guidance.
 
-If docs conflict, the approved MVP spec wins unless the user explicitly changes the requirement.
+If current docs conflict, the current Graph multi-live spec and accepted ADR 0002 win unless the user explicitly changes the requirement.
 
-## Current hard gate
+## Current product contract
 
-The approved scope amendment on 2026-09-10 defers Shopee capture/integration while Facebook and TikTok are completed first.
-
-Before building the shared core/TTS path, require proven runtime capture for:
-
-- Facebook Live: real `username + text`
-- TikTok Live: real `username + text`
-
-Shopee Live is currently deferred and does **not** block the Facebook/TikTok core, TTS, or Facebook multi-live work. However, the full three-platform MVP must not be called complete until Shopee also has a proven runtime capture route and is integrated end-to-end.
-
-A platform is not PASS because a selector looks plausible. PASS requires a real new comment observed end-to-end on a current livestream page.
+- Facebook ingestion uses server-side Graph API polling, not DOM scraping.
+- Support 2–9 active or connecting managed Facebook Live sessions.
+- Each live has an independent polling lifecycle and source identity.
+- Accepted comments share one bounded FIFO TTS queue.
+- Facebook TTS speaks **comment content only**; do not require or speak viewer names.
+- Stop-one must not disturb other live sessions; stop-all clears all sessions/waiting queue.
+- Browser playback ownership is single-owner with handover on disconnect.
+- TikTok/Shopee web ingestion is deferred and must not be represented as implemented.
 
 ## Implementation rules
 
-- Prefer the simplest solution that satisfies the current MVP.
-- Keep platform-specific capture code under `src/connectors/<platform>/`.
-- Do not introduce backend services, databases, Redis, message brokers, DI containers, event buses, or a generic plugin framework.
-- Do not add Playwright/Puppeteer/Selenium while Electron source windows can perform the required runtime inspection/capture.
-- Try DOM observation first. Inspect network/WebSocket only when DOM capture is actually non-viable.
-- Do not guess selectors from memory or silently copy stale selectors from old projects.
-- Do not use official platform APIs unless needed to unblock the simplest viable capture route.
-- Do not disable Electron background throttling unless a runtime test proves it is necessary.
+- Prefer the simplest solution that satisfies the current contract.
+- Keep Facebook Graph source logic under `src/server/`; keep generic queue/TTS primitives under `src/core/` and `src/tts/`.
+- Do not add Electron, browser-DOM scraping, Playwright/Puppeteer/Selenium, databases, Redis, message brokers, DI containers, event buses or generic plugin frameworks without a new requirement.
+- Do not guess Meta Graph API versions. `FACEBOOK_GRAPH_API_VERSION` is explicit configuration and must be verified against the actual Meta app/dashboard when runtime behavior is tested.
 - Do not refactor unrelated code.
 
 ## Security minimum
 
-Remote Facebook/TikTok/Shopee pages and livestream comments are untrusted input.
+Facebook Graph responses, operator input and livestream comments are untrusted input.
 
 Always preserve:
 
-- `nodeIntegration: false`
-- `contextIsolation: true`
-- `sandbox: true`
-- muted source-window audio
-- platform URL allowlist
-- unexpected popup/new-window blocking
-- IPC sender + payload validation
-- output encoding/sanitization before embedding comment text into another format such as SSML
+- server binding to loopback only for the current product;
+- Page Access Token server-side only;
+- bearer token in the Graph `Authorization` header, never browser state/query strings;
+- bounded/validated HTTP JSON bodies;
+- origin checks for local POST/SSE boundaries;
+- CSP/security headers on the web UI;
+- safe browser rendering (`textContent` or equivalent) for external text;
+- no token/cookie/authorization-header logging.
 
-Never expose raw `ipcRenderer`, `require`, `fs`, `shell`, or other Node privileges to remote pages.
+Never commit or log passwords, OTP/2FA codes, cookies, access/session tokens, authorization headers or full browser storage dumps.
 
-Never commit or log:
-
-- passwords
-- OTP/2FA codes
-- cookies or cookie dumps
-- access/session tokens
-- authorization headers
-- full browser storage dumps
-
-Do not bypass CAPTCHA, 2FA, anti-bot checks, or login challenges. Ask the operator to complete them manually.
+Public hosting, non-loopback binding, authentication, webhooks or additional external integrations require a separate security/architecture decision.
 
 ## Verification honesty
 
@@ -74,11 +62,9 @@ Keep these states separate:
 
 - **Implemented** — code/docs exist.
 - **Verified** — command/runtime behavior was actually observed.
-- **Not verified** — still requires environment, account, live session, or dependency access.
+- **Not verified** — still requires environment, account, live session or external dependency access.
 
-Never mark a task complete because code compiles visually or because a previous implementation elsewhere behaved similarly.
-
-For repository checks, use the commands that actually exist in `package.json`, currently:
+For repository checks use the commands that actually exist in `package.json`:
 
 ```bash
 npm ci
@@ -88,21 +74,11 @@ npm run build
 npm run dev
 ```
 
+Changes to Graph ingestion, concurrency, queueing, playback ownership or token handling require appropriate runtime evidence in addition to automated tests. Pure cleanup that does not change the active web behavior still requires full typecheck/tests/build and CI on Ubuntu + Windows.
+
 ## Runtime evidence
 
-For each capture spike, record in `tasks/capture-findings.md`:
-
-- platform
-- PASS/FAIL/DEFERRED
-- test marker used
-- observed username
-- observed exact comment text
-- capture boundary: DOM / network / WebSocket
-- selector/event rationale
-- commands/checks actually run
-- known fragility or blocker
-
-Do not record sensitive account/session data.
+Record material runtime checks in `tasks/capture-findings.md` without secrets. For Facebook Graph, record the tested commit, Live IDs when safe, exact marker text, observed latency, queue/playback result and secret-boundary checks relevant to the change.
 
 ## Review order
 
@@ -114,4 +90,4 @@ Before considering a change complete, review in this order:
 4. simplicity
 5. performance
 
-Optimize only after measurement. Keep README/spec/plan/todo aligned with current truth.
+Keep README/spec/plan/todo aligned with current truth.
