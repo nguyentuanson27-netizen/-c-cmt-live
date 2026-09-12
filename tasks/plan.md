@@ -1,70 +1,78 @@
-# Implementation Plan — Facebook Graph Web Runtime
+# Implementation Plan — Facebook Graph Multi-Live
 
-This plan supersedes the Electron multi-live continuation for the active Facebook path. The existing Electron implementation remains historical/rollback code until the Graph path passes real-live verification.
+The single-live Graph web runtime is proven and merged. This phase scales that exact runtime to **2–9 concurrent Facebook Lives** without changing the token boundary or TTS product contract.
 
 ## Dependency graph
 
 ```text
-Task 1 Graph connector + TDD
+Task 1 Multi-live manager + RED/GREEN tests
         ↓
-Task 2 Local HTTP/SSE runtime
+Task 2 Per-live queue/source isolation
         ↓
-Task 3 Existing core queue + Edge TTS browser playback
+Task 3 HTTP/SSE + operator UI for add/stop individual lives
         ↓
-Task 4 Real Page live runtime verification
+Task 4 Full CI + self-review
         ↓
-Task 5 Retire legacy Electron Facebook path / then multi-live
+Task 5 Two-live real runtime verification
 ```
 
-## Task 1 — Graph connector
+## Task 1 — Multi-live lifecycle manager
 
 **Acceptance criteria:**
-- [x] Parse numeric Live Video IDs and Facebook video URLs; reject unrelated hosts.
-- [x] Page token is sent only in `Authorization: Bearer ...`, never URL/log/browser.
-- [x] Initial newest comment is a baseline boundary; existing comments are not emitted.
-- [x] Polling paginates until the previous boundary so >1 page of new comments is not silently lost.
-- [x] Pagination has a hard page cap and reports inability to catch up instead of silently advancing the boundary.
-- [x] Stop/restart aborts/discards stale in-flight work.
-- [x] Token error stops the connector cleanly and reports the real token-expiry error.
+- [ ] Add `FacebookLiveManager` around independent `FacebookGraphCommentPoller` instances.
+- [ ] Reject duplicate live IDs without disturbing the active session.
+- [ ] Enforce a hard cap of 9 across active + pending starts.
+- [ ] Concurrent starts cannot race past the cap.
+- [ ] Failed baseline/start does not consume a slot or affect other lives.
+- [ ] Token-expiry/error in one poller removes only that live from manager state.
+- [ ] Stop one and stop-all are isolated and idempotent.
 
-**Verification:** 6 focused Graph connector tests plus the full repository suite. TDD evidence includes RED for the missing connector and RED for the token-expiry regression before each GREEN implementation.
+**Verification:** focused manager tests written RED first, then full suite.
 
-## Task 2 — Local HTTP + SSE
-
-**Acceptance criteria:**
-- [x] Server defaults to `127.0.0.1` and refuses non-loopback binding.
-- [x] Token/API version are read from server env only.
-- [x] Browser can start/stop a live by ID/URL and read status.
-- [x] SSE emits status/comments/queue/playback events with bounded recent UI state.
-- [x] Request body size/type is validated.
-- [x] Security headers/CSP are set for the static UI.
-
-**Verification:** focused server-boundary/playback tests plus full typecheck/tests/build in CI.
-
-## Task 3 — Queue/TTS integration
+## Task 2 — Shared FIFO with per-live isolation
 
 **Acceptance criteria:**
-- [x] Comments use existing normalization/filtering.
-- [x] Single-live dedup state is reset on each successful connection attempt and comment source identity includes the Live Video ID.
-- [x] Existing queue max/stale semantics remain intact.
-- [x] Edge TTS spoken text remains exactly `username: comment`.
-- [x] Server emits one playback item at a time and waits for matching browser completion before advancing.
-- [x] Pause/resume and clear-waiting-queue controls remain available in the web UI.
+- [ ] Graph comments carry `sourceId = facebook-graph:<liveVideoId>`.
+- [ ] Content dedup state is scoped per live so identical comments on different lives do not collide.
+- [ ] Add a generic queue selective-removal primitive if needed.
+- [ ] Stopping one live removes only waiting items from that source; currently playing audio may finish.
+- [ ] Adding a live never clears existing queue items.
+- [ ] Stop-all clears all waiting queue items.
 
-**Verification:** existing core/TTS tests + browser playback bridge tests + full repository suite.
+**Verification:** queue/source regression tests + full suite.
 
-## Task 4 — Runtime gate
+## Task 3 — Web API/SSE/UI
 
 **Acceptance criteria:**
-- [ ] Verify the actual `FACEBOOK_GRAPH_API_VERSION` supported by the Meta app and the Page token permissions against official Meta/App Dashboard information.
-- [ ] Real managed Facebook Page live receives an exact test marker and viewer username through Graph API.
-- [ ] Comments present before connect are not spoken.
-- [ ] Two quick comments play sequentially without overlap.
-- [ ] Observed end-to-end comment latency is recorded.
-- [ ] Browser storage/network URLs/log output contain no Page token.
+- [ ] `/api/facebook/start` adds a live instead of replacing all sessions.
+- [ ] `/api/facebook/stop` accepts an optional `liveVideoId`; omitted means stop-all for compatibility.
+- [ ] `/api/status` and SSE snapshot expose active live IDs/count without exposing secrets.
+- [ ] Status/comment events identify the source live.
+- [ ] UI shows up to 9 active live IDs with individual Stop controls plus Stop all.
+- [ ] Existing TTS pause/clear/playback-owner behavior remains unchanged.
+- [ ] UI and server validate all request payloads and remain loopback-only.
 
-**Verification:** manual browser/runtime evidence recorded in `tasks/capture-findings.md`.
+**Verification:** focused boundary tests, keyboard/basic accessibility review, full typecheck/tests/build.
 
-## Task 5 — Follow-up
+## Task 4 — Automated verification and review
 
-After Task 4 passes, remove/deprecate obsolete Facebook DOM/Electron runtime in a focused PR, then reintroduce 2→9 Facebook multi-live on the proven Graph connector. TikTok/Shopee strategy is a separate product decision.
+**Acceptance criteria:**
+- [ ] `npm run typecheck` PASS.
+- [ ] `npm test` PASS.
+- [ ] `npm run build` PASS.
+- [ ] Ubuntu + Windows CI PASS on exact head.
+- [ ] Self-review: correctness → security → architecture → simplicity → performance.
+- [ ] No unresolved Required findings.
+
+## Task 5 — Runtime merge gate
+
+**Acceptance criteria:**
+- [ ] Connect two real managed Facebook Lives at the same time.
+- [ ] Existing comments baseline independently on both lives.
+- [ ] A marker comment on Live A and one on Live B both reach the UI and shared queue.
+- [ ] TTS speaks only comment content and plays the two items sequentially without overlap.
+- [ ] Stopping Live A leaves Live B receiving/reading new comments.
+- [ ] Page token remains absent from browser storage/URLs/SSE/logs.
+- [ ] Observed Graph→app latency for both live sources is recorded.
+
+**Verification:** runtime evidence recorded in `tasks/capture-findings.md` before merge-ready.
