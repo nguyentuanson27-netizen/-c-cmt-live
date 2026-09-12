@@ -55,3 +55,30 @@ export function parseFacebookStartRequest(
 
   return { ok: true, liveVideoIdOrUrl };
 }
+
+export function parseFacebookStopRequest(
+  value: unknown,
+): { ok: true; liveVideoId?: string } | { ok: false; error: string } {
+  if (value === null || value === undefined) {
+    return { ok: true };
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, error: "Request body must be a JSON object" };
+  }
+
+  const record = value as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(record, "token")) {
+    return { ok: false, error: "Page Access Token must be configured on the server, not sent by the browser" };
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(record, "liveVideoId")) {
+    return { ok: true };
+  }
+
+  const liveVideoId = typeof record.liveVideoId === "string" ? record.liveVideoId.trim() : "";
+  if (!/^\d+$/.test(liveVideoId)) {
+    return { ok: false, error: "liveVideoId must be a numeric Facebook Live Video ID" };
+  }
+
+  return { ok: true, liveVideoId };
+}
