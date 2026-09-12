@@ -12,11 +12,17 @@ import { FacebookLiveManager } from "./facebook-live-manager";
 import {
   isLoopbackHost,
   loadFacebookServerConfig,
+  loadTikTokServerConfig,
   parseFacebookStartRequest,
   parseFacebookStopRequest,
+  parseTikTokStartRequest,
+  parseTikTokStopRequest,
 } from "./config";
 import { SseHub } from "./events";
 import { BrowserPlaybackBridge } from "./playback-bridge";
+import { TikTokCommentProcessor } from "./tiktok-comment-processor";
+import type { TikTokEulerComment } from "./tiktok-euler";
+import { TikTokEulerSession } from "./tiktok-euler-session";
 
 class HttpError extends Error {
   constructor(
@@ -41,6 +47,8 @@ const webRoot = resolve(__dirname, "../../web");
 const hub = new SseHub();
 const liveManager = new FacebookLiveManager({ maxLives: MAX_FACEBOOK_LIVES });
 const commentProcessor = new FacebookCommentProcessor();
+const tiktokSession = new TikTokEulerSession();
+const tiktokCommentProcessor = new TikTokCommentProcessor();
 const commentQueue = new CommentQueue(30, 30_000);
 const ttsService = new TTSService();
 const playbackBridge = new BrowserPlaybackBridge((event) => {
@@ -60,8 +68,22 @@ function liveStatePayload(): Record<string, unknown> {
   };
 }
 
+function tiktokStatePayload(): Record<string, unknown> {
+  const activeCreator = tiktokSession.activeCreator;
+  const connectingCreator = tiktokSession.connectingCreator;
+  return {
+    tiktokActive: Boolean(activeCreator),
+    tiktokConnecting: Boolean(connectingCreator),
+    tiktokCreator: activeCreator ?? connectingCreator ?? null,
+  };
+}
+
 function broadcastLiveState(): void {
   hub.broadcast({ type: "lives", ...liveStatePayload() });
+}
+
+function broadcastTikTokState(): void {
+  hub.broadcast({ type: "tiktok", ...tiktokStatePayload() });
 }
 
 function broadcastStatus(
@@ -71,11 +93,27 @@ function broadcastStatus(
 ): void {
   hub.broadcast({
     type: "status",
+    platform: "facebook",
     liveVideoId,
     message,
     level,
   });
   broadcastLiveState();
+}
+
+function broadcastTikTokStatus(
+  creator: string,
+  message: string,
+  level: "info" | "error" = "info",
+): void {
+  hub.broadcast({
+    type: "status",
+    platform: "tiktok",
+    creator,
+    message,
+    level,
+  });
+  broadcastTikTokState();
 }
 
 function broadcastQueueState(current: Comment | null = playbackManager.getCurrentComment()): void {
@@ -133,6 +171,7 @@ function handleGraphComment(liveVideoId: string, graphComment: FacebookGraphComm
   commentQueue.enqueue(item);
   hub.broadcast({
     type: "comment",
+    platform: "facebook",
     liveVideoId,
     comment: {
       id: item.id,
@@ -148,6 +187,32 @@ function handleGraphComment(liveVideoId: string, graphComment: FacebookGraphComm
   void playbackManager.processNext();
 }
 
+function handleTikTokComment(creator: string, providerComment: TikTokEulerComment): void {
+  const receivedAt = Date.now();
+  const item = tiktokCommentProcessor.process(creator, providerComment, receivedAt);
+  if (!item) {
+    return;
+  }
+
+  commentQueue.enqueue(item);
+  hub.broadcast({
+    type: "comment",
+    platform: "tiktok",
+    creator,
+    comment: {
+      id: item.id,
+      sourceId: item.sourceId,
+      username: item.username,
+      text: item.text,
+      sourceLabel: item.sourceLabel,
+      receivedAt,
+      observedLatencyMs: Math.max(0, receivedAt - providerComment.timestamp),
+    },
+  });
+  broadcastQueueState();
+  void playbackManager.processNext();
+}
+
 const facebookEvents = {
   onComment: handleGraphComment,
   onStatus: (liveVideoId: string, message: string, level: "info" | "error") => {
@@ -155,6 +220,16 @@ const facebookEvents = {
       commentProcessor.clearLive(liveVideoId);
     }
     broadcastStatus(liveVideoId, message, level);
+  },
+};
+
+const tiktokEvents = {
+  onComment: handleTikTokComment,
+  onStatus: (creator: string, message: string, level: "info" | "error") => {
+    if (!tiktokSession.activeCreator && !tiktokSession.connectingCreator) {
+      tiktokCommentProcessor.clear();
+    }
+    broadcastTikTokStatus(creator, message, level);
   },
 };
 
@@ -240,9 +315,12 @@ async function serveStatic(pathname: string, response: ServerResponse): Promise<
 
 function statusPayload(): Record<string, unknown> {
   const facebookConfig = loadFacebookServerConfig(process.env);
+  const tiktokConfig = loadTikTokServerConfig(process.env);
   return {
     ...liveStatePayload(),
+    ...tiktokStatePayload(),
     facebookConfigured: facebookConfig.ok,
+    tiktokConfigured: tiktokConfig.ok,
     queueSize: commentQueue.size(),
     ttsPaused,
     browserClients: hub.clientCount,
@@ -257,6 +335,19 @@ function startFailureStatus(error?: string): number {
     return 400;
   }
   if (/already active|maximum \d+ facebook lives/i.test(error)) {
+    return 409;
+  }
+  return 502;
+}
+
+function tiktokStartFailureStatus(error?: string): number {
+  if (!error) {
+    return 502;
+  }
+  if (/invalid tiktok creator/i.test(error)) {
+    return 400;
+  }
+  if (/already active or connecting/i.test(error)) {
     return 409;
   }
   return 502;
@@ -378,10 +469,50 @@ const server = createServer(async (request, response) => {
 
       liveManager.stopAll();
       commentProcessor.clearAll();
-      commentQueue.clear();
+      commentQueue.removeWhere((comment) => comment.sourceId.startsWith("facebook-graph:"));
       broadcastQueueState();
       broadcastLiveState();
       sendJson(response, 200, { ok: true, ...liveStatePayload() });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/tiktok/start") {
+      const browserRequest = parseTikTokStartRequest(await readJsonBody(request));
+      if (!browserRequest.ok) {
+        sendJson(response, 400, browserRequest);
+        return;
+      }
+      const serverConfig = loadTikTokServerConfig(process.env);
+      if (!serverConfig.ok) {
+        sendJson(response, 503, serverConfig);
+        return;
+      }
+
+      const result = await tiktokSession.start(
+        { creator: browserRequest.creator, apiKey: serverConfig.config.apiKey },
+        tiktokEvents,
+      );
+      broadcastTikTokState();
+      sendJson(response, result.ok ? 200 : tiktokStartFailureStatus(result.error), {
+        ...result,
+        ...tiktokStatePayload(),
+      });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/tiktok/stop") {
+      const stopRequest = parseTikTokStopRequest(await readJsonBody(request));
+      if (!stopRequest.ok) {
+        sendJson(response, 400, stopRequest);
+        return;
+      }
+
+      const stopped = tiktokSession.stop();
+      tiktokCommentProcessor.clear();
+      commentQueue.removeWhere((comment) => comment.sourceId.startsWith("tiktok-euler:"));
+      broadcastQueueState();
+      broadcastTikTokState();
+      sendJson(response, 200, { ok: true, stopped, ...tiktokStatePayload() });
       return;
     }
 
@@ -436,12 +567,17 @@ server.listen(port, host, () => {
   if (!loadFacebookServerConfig(process.env).ok) {
     console.log("Facebook Graph API is not configured yet. Set FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_GRAPH_API_VERSION on the server.");
   }
+  if (!loadTikTokServerConfig(process.env).ok) {
+    console.log("TikTok Euler Stream is not configured yet. Set EULER_API_KEY on the server.");
+  }
 });
 
 function shutdown(): void {
   liveManager.stopAll();
+  tiktokSession.stop();
   playbackBridge.cancelPending();
   commentProcessor.clearAll();
+  tiktokCommentProcessor.clear();
   commentQueue.clear();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 2_000).unref();
