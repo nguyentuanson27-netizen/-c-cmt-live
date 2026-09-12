@@ -40,7 +40,7 @@
 - [x] CI PASS on Ubuntu + Windows for code head `b6e65f9465f92220a1882bbb2e3a90e3a1395166`.
 - [x] TTS reconnect regression coverage added; 63/63 tests and CI PASS on Ubuntu + Windows at `a41fb379925ce0f9d3257b89e046f5fa60979238`.
 - [x] RED verification for comment-only Graph speech: CI reproduced `": comment"` formatting and anonymous-comment dedup collision before the fix.
-- [ ] Final exact-head CI after comment-only speech/docs changes.
+- [x] Comment-only Graph speech + anonymous-comment dedup fix PASS on Ubuntu + Windows CI at code head `9b237d4af386a4386b3660783230ec3417e454ad`.
 - [x] Security/code self-review: no token in browser storage, Graph URL, logs or SSE payloads; browser cannot submit a token; local runtime refuses non-loopback binding; failed replacement starts preserve the current live/queue; playback is single-browser-owned.
 
 ## Runtime verification — merge gate
