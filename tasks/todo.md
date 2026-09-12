@@ -33,7 +33,7 @@
 - [x] Ubuntu CI PASS on cleanup code head `b7d19b0051e7a09b1406cd27f50e16fe078f1534`.
 - [x] Windows CI PASS on cleanup code head `b7d19b0051e7a09b1406cd27f50e16fe078f1534`.
 - [x] Self-review: no Required findings across correctness, security, architecture, simplicity or performance.
-- [ ] Final exact-head CI PASS after this documentation update.
+- [x] Final exact-head CI PASS after the documentation-only closeout commit.
 
 ## Runtime note
 
