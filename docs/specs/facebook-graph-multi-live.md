@@ -23,25 +23,29 @@ npm run build
 npm run dev
 ```
 
+`npm run build` also syntax-checks `web/app.js` before the runtime-module guard.
+
 ## Project structure
 
 ```text
 src/server/facebook-graph.ts          # one-live Graph polling primitive
 src/server/facebook-live-manager.ts   # 2→9 live lifecycle/capacity orchestration
+src/server/facebook-comment-processor.ts # per-live normalize/dedup/source identity
 src/server/main.ts                    # HTTP/SSE + shared queue/TTS
-src/core/queue.ts                     # bounded FIFO; generic selective removal if needed
+src/core/queue.ts                     # bounded FIFO + selective removal
 web/index.html                        # operator controls + active-live list
 web/app.js                            # add/stop individual live sessions
 web/app.css                           # existing visual system
 
 tests/facebook-live-manager.test.ts  # manager lifecycle/capacity/race coverage
+tests/facebook-comment-processor.test.ts # per-live dedup/source coverage
 tests/comment-queue.test.ts           # selective queue removal coverage
-tests/web-runtime.test.ts             # server contract/static safety
+tests/web-runtime.test.ts             # request/security boundary coverage
 ```
 
 ## Code style
 
-Keep the single-live poller focused and source-agnostic orchestration outside it:
+Keep the single-live poller focused and source-specific orchestration outside it:
 
 ```ts
 const result = await manager.startLive(config, {
@@ -54,10 +58,11 @@ Do not introduce a generic framework or global event bus for nine sessions.
 
 ## Testing strategy
 
-- TDD for manager capacity, duplicate starts, concurrent-start races, per-live stop and stop-all.
+- TDD for manager capacity, duplicate starts, concurrent-start races, per-live stop and inactive-session cleanup.
 - Preserve existing poller baseline/pagination/stale-request tests.
 - Verify comments from two live IDs keep distinct `sourceId`s and do not cross-deduplicate.
 - Verify stopping one live keeps other lives active and drops only waiting queue items from the stopped source.
+- Verify repeated stop-one is a safe no-op at the HTTP behavior boundary.
 - Full typecheck/tests/build on Ubuntu + Windows CI.
 - Runtime merge gate: two real managed Facebook Lives active together, comments from both reach one sequential TTS queue.
 
@@ -92,14 +97,15 @@ Do not introduce a generic framework or global event bus for nine sessions.
 4. Two simultaneous start requests cannot exceed the 9-live cap.
 5. Each active live baselines independently and emits only post-connect comments.
 6. Comments from different lives retain distinct source identity and share one FIFO TTS pipeline.
-7. Stopping Live A leaves Live B…Live I running and removes only queued items belonging to A; currently playing audio may finish.
-8. Stop-all terminates all pollers and clears the shared queue.
-9. Browser shows active live IDs and lets the operator stop one or all.
-10. FB-API TTS still speaks only exact comment content.
-11. Existing token/origin/CSP/security boundaries remain intact.
-12. Typecheck, full tests and build pass on Ubuntu + Windows.
-13. Real runtime evidence proves two Facebook Lives can feed the same sequential TTS queue.
+7. Stopping Live A leaves Live B…Live I running and removes only queued items belonging to A; a currently processing/playing item may finish.
+8. Repeating stop for an already-stopped live is a successful no-op and does not affect other sessions.
+9. Stop-all terminates all pollers and clears the shared queue.
+10. Browser shows active live IDs and lets the operator stop one or all.
+11. FB-API TTS still speaks only exact comment content.
+12. Existing token/origin/CSP/security boundaries remain intact.
+13. Typecheck, full tests and build pass on Ubuntu + Windows.
+14. Real runtime evidence proves two Facebook Lives can feed the same sequential TTS queue.
 
 ## Open questions
 
-None blocking for this phase. Auto-discovery, per-live voices and >9 sessions remain explicitly deferred.
+None blocking for implementation. Auto-discovery, per-live voices and >9 sessions remain explicitly deferred. Real two-live runtime verification remains the merge gate.
