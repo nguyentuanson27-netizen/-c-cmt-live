@@ -11,6 +11,7 @@ const MAX_USERNAME_LENGTH = 128;
 const MAX_COMMENT_LENGTH = 1000;
 const MAX_MESSAGE_ID_LENGTH = 128;
 const MAX_BUNDLE_MESSAGES = 200;
+const MAX_BUNDLE_BYTES = 1_000_000;
 const MAX_ERROR_LENGTH = 300;
 const UNIQUE_ID_PATTERN = /^[A-Za-z0-9._]+$/;
 
@@ -170,6 +171,9 @@ function normalizeChatMessage(
 export function parseEulerMessageBundle(payload: unknown): TikTokEulerComment[] {
   let parsed: unknown = payload;
   if (typeof payload === "string") {
+    if (Buffer.byteLength(payload, "utf8") > MAX_BUNDLE_BYTES) {
+      return [];
+    }
     try {
       parsed = JSON.parse(payload) as unknown;
     } catch {
