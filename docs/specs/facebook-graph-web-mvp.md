@@ -22,7 +22,7 @@ npm run build
 npm run dev
 ```
 
-`npm run dev` must start the web runtime after this migration slice. The legacy Electron implementation may remain in the repository temporarily for comparison, but it is not the active operator path.
+`npm run dev` starts the web runtime. The legacy Electron implementation was removed after the Graph replacement and multi-live extension were runtime-proven; ADR 0001 remains only as historical context.
 
 ## Project structure
 
@@ -54,7 +54,7 @@ if (!liveVideoId) {
 - Regression coverage ensures unattributed Facebook comments are not collapsed by content-based dedup.
 - Existing core/TTS tests remain green.
 - CI runs typecheck, full tests and build on Ubuntu + Windows.
-- Runtime verification with a real managed Page live remains mandatory before merge-ready status.
+- Runtime verification with a real managed Page live remains mandatory when Graph ingestion behavior changes.
 
 ## Boundaries
 
@@ -63,8 +63,8 @@ if (!liveVideoId) {
 - Bind the development server to `127.0.0.1` by default.
 - Validate JSON body size/type and Facebook Live identifiers.
 - Poll comments with bounded pagination and discard stale async work after stop/restart.
-- Scope deduplication by live source; do not content-deduplicate comments that all share the fallback `Facebook viewer` identity.
-- For `FB-API`, synthesize only the normalized comment text. Do not speak viewer username or the `Facebook viewer` fallback.
+- Scope deduplication by live source; do not collapse distinct unattributed comments merely because their text matches.
+- For `FB-API`, synthesize only the normalized comment text. Do not speak viewer username or a fallback identity.
 
 ### Ask first
 - Public internet deployment or non-loopback binding.
@@ -72,7 +72,7 @@ if (!liveVideoId) {
 - Webhooks/public HTTPS infrastructure.
 
 ### Never
-- Scrape Facebook DOM in the new active path.
+- Scrape Facebook DOM in the active path.
 - Put Page Access Tokens in query strings or browser storage.
 - Log tokens or Graph API authorization headers.
 - Silently pin an unverified/deprecated Graph API version.
@@ -85,12 +85,15 @@ if (!liveVideoId) {
 4. New comments are polled with bounded pagination so bursts larger than one page are not silently lost.
 5. Stop/restart cannot let an old in-flight poll emit into the new session.
 6. Accepted comments flow through normalization, source-scoped dedup, bounded FIFO and sequential Edge TTS.
-7. `FB-API` audio contains only comment text, never username or the `Facebook viewer` fallback.
+7. `FB-API` audio contains only comment text, never username or a fallback identity.
 8. Audio is played in the browser and completion advances the server-side queue.
 9. Typecheck/tests/build pass on Windows and Ubuntu CI.
-10. A real Page live runtime check records exact external-viewer comment text and observed comment latency before merge-ready; viewer username is not required.
+10. A real Page live runtime check records exact external-viewer comment text and observed comment latency before a Graph-ingestion change is considered merge-ready; viewer username is not required.
+
+## Historical follow-up
+
+The single-live slice was later extended to 2–9 concurrent live sessions under `docs/specs/facebook-graph-multi-live.md` and verified with two real Facebook Lives. The obsolete Electron implementation was then removed in the focused cleanup under `docs/specs/remove-legacy-electron.md`.
 
 ## Open questions
 
-- The current Meta Graph API version must be supplied explicitly via `FACEBOOK_GRAPH_API_VERSION` and verified against the Meta app/dashboard before runtime verification. Official docs were rate-limited during implementation, so this PR must not guess a version.
-- Multi-live 2–9 is intentionally deferred until the single-live Graph path is proven in runtime.
+The current Meta Graph API version must be supplied explicitly via `FACEBOOK_GRAPH_API_VERSION` and verified against the Meta app/dashboard before runtime verification. Do not guess a version from memory.
