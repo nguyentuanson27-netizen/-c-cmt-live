@@ -11,7 +11,7 @@
       <header>
         <p class="eyebrow">LOCAL WEB RUNTIME</p>
         <h1>Facebook Live Comment TTS</h1>
-        <p class="lead">Graph API → queue → Edge TTS. Không đọc DOM Facebook và không lưu Page token trong trình duyệt.</p>
+        <p class="lead">Theo dõi tối đa 9 Facebook Live qua Graph API → một queue → Edge TTS. Không đọc DOM Facebook và không lưu Page token trong trình duyệt.</p>
       </header>
 
       <section class="card" aria-labelledby="connection-heading">
@@ -19,10 +19,17 @@
         <label for="live-input">Live Video ID hoặc URL Facebook</label>
         <input id="live-input" type="text" autocomplete="off" placeholder="1234567890 hoặc https://facebook.com/.../videos/..." />
         <div class="actions">
-          <button id="start" type="button">Bắt đầu đọc</button>
-          <button id="stop" type="button" class="secondary">Dừng</button>
+          <button id="start" type="button">Thêm live</button>
+          <button id="stop-all" type="button" class="secondary">Dừng tất cả</button>
         </div>
         <p id="status" class="status" role="status" aria-live="polite">Đang kiểm tra cấu hình server…</p>
+        <div class="live-panel" aria-labelledby="active-lives-heading">
+          <div class="section-row compact-row">
+            <h3 id="active-lives-heading">Live đang theo dõi</h3>
+            <span id="live-summary" class="muted">0/9 live</span>
+          </div>
+          <ul id="active-lives" class="live-list"></ul>
+        </div>
         <p class="hint">Page Access Token và Graph API version được cấu hình ở server environment, không nhập tại đây.</p>
       </section>
 
@@ -37,7 +44,7 @@
             <button id="clear-queue" type="button" class="secondary">Xóa queue</button>
           </div>
         </div>
-        <div id="current" class="current">Chưa đọc comment nào.</div>
+        <div id="current" class="current">Chưa có comment đang đọc.</div>
       </section>
 
       <section class="card" aria-labelledby="recent-heading">
