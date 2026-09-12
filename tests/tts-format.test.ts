@@ -20,13 +20,13 @@ describe("TTS text formatting", () => {
     expect(formatted).not.toContain("Page Bán Quần Áo");
   });
 
-  it("reads only comment content when the active source intentionally has no username", () => {
+  it("reads only comment content for the Facebook Graph web source", () => {
     const comment: Comment = {
       id: "c-graph",
       platform: "facebook",
       sourceId: "facebook-graph:live-1",
       sourceLabel: "FB-API",
-      username: "",
+      username: "Facebook viewer",
       text: "chốt size M",
       receivedAt: Date.now(),
     };
