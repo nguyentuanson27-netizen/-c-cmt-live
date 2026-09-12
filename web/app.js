@@ -17,6 +17,8 @@ let audioContext = null;
 let ttsPaused = false;
 let activeLiveIds = [];
 let discoveredLives = [];
+let discoveryAttempted = false;
+let discoveryFailed = false;
 let pendingCount = 0;
 let maxLives = 9;
 
@@ -117,15 +119,31 @@ async function stopLive(liveVideoId) {
   }
 }
 
+function appendDiscoveryMessage(message) {
+  const item = document.createElement("li");
+  item.className = "live-empty";
+  item.textContent = message;
+  discoveredLivesElement.append(item);
+}
+
 function renderDiscoveredLives() {
   discoveredLivesElement.replaceChildren();
-  discoverySummary.textContent = `${discoveredLives.length} live`;
 
+  if (!discoveryAttempted) {
+    discoverySummary.textContent = "Chưa tìm";
+    appendDiscoveryMessage("Bấm “Tìm live đang phát” để tải danh sách từ Facebook Graph API.");
+    return;
+  }
+
+  if (discoveryFailed) {
+    discoverySummary.textContent = "Lỗi";
+    appendDiscoveryMessage("Không tải được danh sách live. Thử lại sau khi kiểm tra cấu hình/Graph API.");
+    return;
+  }
+
+  discoverySummary.textContent = `${discoveredLives.length} live`;
   if (discoveredLives.length === 0) {
-    const empty = document.createElement("li");
-    empty.className = "live-empty";
-    empty.textContent = "Không tìm thấy live đang phát.";
-    discoveredLivesElement.append(empty);
+    appendDiscoveryMessage("Không tìm thấy live đang phát.");
     return;
   }
 
@@ -276,6 +294,8 @@ discoverButton.addEventListener("click", async () => {
           (live) => live && typeof live === "object" && typeof live.id === "string" && /^\d+$/.test(live.id),
         )
       : [];
+    discoveryAttempted = true;
+    discoveryFailed = false;
     renderDiscoveredLives();
     setStatus(
       discoveredLives.length > 0
@@ -284,8 +304,9 @@ discoverButton.addEventListener("click", async () => {
     );
   } catch (error) {
     discoveredLives = [];
+    discoveryAttempted = true;
+    discoveryFailed = true;
     renderDiscoveredLives();
-    discoverySummary.textContent = "Lỗi";
     setStatus(error instanceof Error ? error.message : "Không thể tìm Facebook Live", "error");
   } finally {
     discoverButton.disabled = false;
